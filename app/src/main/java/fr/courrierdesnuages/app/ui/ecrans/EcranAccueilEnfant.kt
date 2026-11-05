@@ -148,21 +148,26 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
                 onClick = { vm.commencerCalcul(profil) },
             )
         }
-        // Italien : le pigeon voyageur apporte le mot du soir, du lundi au vendredi.
+        // Italien : le pigeon voyageur apporte le mot du jour (du lundi au vendredi) ; le week-end,
+        // on rattrape les mots de la semaine pas encore faits et on revoit ceux qui n'étaient pas sus.
         val jour = Jours.aujourdhui()
         val seanceItalien = donnees.seance(jour, Matiere.ITALIEN)
         val lundi = Semaines.lundi(LocalDate.now()).toString()
         val motsItalien = if (donnees.chargees) vm.motsDuSoirItalien(profil) else emptyList()
+        val motDuJour = vm.motDuJourItalien()
         when {
             !donnees.chargees || !vm.semaineChargee(lundi) ->
                 TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Ouverture…")
-            seanceItalien == null && Semaines.numeroDuJour(LocalDate.now()) > 5 ->
-                TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Repos le week-end")
             seanceItalien == null && motsItalien.isEmpty() ->
-                TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Pas de mot ce soir")
+                TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Pas de mot aujourd'hui")
             seanceItalien == null -> TuileMatiere(
                 matiere = "Italien",
-                titre = if (motsItalien.size > 1) "Le mot du soir + ${motsItalien.size - 1} à revoir" else "Le mot du soir",
+                titre = when {
+                    motDuJour != null && motsItalien.size > 1 ->
+                        "Le mot du jour + ${motsItalien.size - 1} autre${if (motsItalien.size > 2) "s" else ""}"
+                    motDuJour != null -> "Le mot du jour"
+                    else -> "${motsItalien.size} mot${if (motsItalien.size > 1) "s" else ""} à rattraper"
+                },
                 couleur = Jaune,
                 symbole = "Ciao",
                 etat = "C'est parti !",

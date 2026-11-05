@@ -74,6 +74,9 @@ sealed interface Ecran {
     data object NouvelleCarte : Ecran
 }
 
+/** Une carte offerte par le parent n'appartient à aucune semaine (elle n'empêche pas d'en gagner une). */
+const val SEMAINE_OFFERTE = "offerte"
+
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val depot = Depot()
@@ -688,18 +691,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------- Le pigeon voyageur ----------
 
+    /** Les séances d'italien de la semaine, du lundi au dimanche (le week-end sert à rattraper). */
     private fun seancesItalienDeLaSemaine(d: DonneesEnfant, lundi: String): List<Seance> {
-        val vendredi = LocalDate.parse(lundi).plusDays(4).toString()
-        return d.seances.filter { it.matiere == Matiere.ITALIEN && it.soir >= lundi && it.soir <= vendredi }
+        val dimanche = LocalDate.parse(lundi).plusDays(6).toString()
+        return d.seances.filter { it.matiere == Matiere.ITALIEN && it.soir >= lundi && it.soir <= dimanche }
     }
 
-    /** Les mots que le pigeon apportera ce soir (vide le week-end ou sans mots de la semaine). */
+    /** Les mots que le pigeon apportera aujourd'hui : le mot du jour, ceux qui attendent et ceux à revoir. */
     fun motsDuSoirItalien(profil: Profil): List<MotItalien> {
         val d = donnees(profil.id)
         val aujourdhui = LocalDate.now()
-        val semaine = semaine(Semaines.lundi(aujourdhui).toString()) ?: return emptyList()
+        val lundi = Semaines.lundi(aujourdhui).toString()
         val aRevoir = d.revisionsItalien.mapNotNull { MotItalien.lire(it.mot) }
-        return RecompenseItalien.motsDuSoir(semaine, aujourdhui, seancesItalienDeLaSemaine(d, semaine.lundi), aRevoir)
+        return RecompenseItalien.motsDuSoir(semaine(lundi), aujourdhui, seancesItalienDeLaSemaine(d, lundi), aRevoir)
+    }
+
+    /** Le mot du jour (du lundi au vendredi), s'il a été saisi. */
+    fun motDuJourItalien(): MotItalien? {
+        val aujourdhui = LocalDate.now()
+        return RecompenseItalien.motDuJour(semaine(Semaines.lundi(aujourdhui).toString()), aujourdhui)
     }
 
     /**
@@ -726,12 +736,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             val mots = if (existante != null) existante.ordre else motsDuSoirItalien(profil).map { it.code }
             if (mots.isEmpty()) return
+            val duJour = motDuJourItalien()?.code
             SeanceItalien(
                 profil = profil,
                 soir = jour,
                 compte = existante == null,
                 ordre = mots,
-                motsRevision = mots.drop(1),
+                motsRevision = mots.filter { it != duJour },
                 resultatsDeja = emptyList<ResultatMot>(),
                 debutLe = maintenant,
                 enregistrer = if (existante == null) ::enregistrerProgressionItalien else { _ -> },
@@ -763,10 +774,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_ITALIEN, aEcrire, aSupprimer)
 
-        // Une semaine sans aucune faute vaut une carte postale, apportée après le dernier mot de la semaine.
+        // Les 5 mots de la semaine sus du premier coup : le pigeon apporte une carte postale,
+        // dès que le dernier d'entre eux a été fait (le vendredi, ou le week-end pour un soir rattrapé).
         val lundi = Semaines.lundi(LocalDate.parse(s.soir)).toString()
         val semaine = semaine(lundi) ?: return
-        if (RecompenseItalien.dernierSoir(semaine) != s.soir) return
         if (d.cartesGagnees.any { it.semaine == lundi }) return
         val seances = seancesItalienDeLaSemaine(d, lundi).filter { it.soir != s.soir } + s.versSeance()
         if (!RecompenseItalien.semaineParfaite(semaine, seances)) return
@@ -798,6 +809,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun cartesRestantes(idProfil: String): Int {
         val gagnees = donnees(idProfil).cartesGagnees.map { it.idCarte }.toSet()
         return toutesLesCartes.count { it.id !in gagnees }
+    }
+
+    /** Le parent offre une carte à un enfant (au hasard parmi celles qu'il n'a pas, ou une carte choisie). */
+    fun offrirCarte(profil: Profil, carte: CartePostale?) {
+        val choisie = carte ?: RecompenseItalien.tirerCarte(toutesLesCartes, donnees(profil.id).cartesGagnees) ?: return
+        depot.enregistrerCarteGagnee(
+            profil.id,
+            CarteGagnee(choisie.id, SEMAINE_OFFERTE, System.currentTimeMillis(), epinglee = false, bienPlacee = false),
+        )
+        messageParent = "La carte de ${choisie.ville} attend ${profil.prenom} sur son accueil."
+    }
+
+    /** Les cartes qu'un enfant n'a pas encore. */
+    fun cartesAGagner(idProfil: String): List<CartePostale> {
+        val gagnees = donnees(idProfil).cartesGagnees.map { it.idCarte }.toSet()
+        return toutesLesCartes.filter { it.id !in gagnees }
     }
 
     /** Après la séance : le pigeon apporte la carte gagnée. */

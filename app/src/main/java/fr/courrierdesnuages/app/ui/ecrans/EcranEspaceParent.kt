@@ -41,6 +41,10 @@ import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
 import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
 import fr.courrierdesnuages.app.ui.composants.Carte
 import fr.courrierdesnuages.app.ui.composants.ImageAvatar
+import fr.courrierdesnuages.app.ui.composants.Pastille
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
 import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
@@ -50,6 +54,7 @@ import fr.courrierdesnuages.app.ui.theme.Vert
 @Composable
 fun EcranEspaceParent(vm: AppViewModel) {
     var confirmerDelier by remember { mutableStateOf(false) }
+    var offrirA by remember { mutableStateOf<Profil?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         BarreRetour("Espace parent", onRetour = { vm.quitter() })
@@ -127,13 +132,18 @@ fun EcranEspaceParent(vm: AppViewModel) {
                 for (p in vm.profils) {
                     val restantes = vm.cartesRestantes(p.id)
                     val gagnees = vm.donnees(p.id).cartesGagnees.size
-                    Text(
-                        "${p.prenom} : $gagnees gagnée${if (gagnees > 1) "s" else ""}, encore $restantes à gagner" +
-                            if (restantes <= 3) ". Pense à créer de nouvelles cartes !" else ".",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (restantes <= 3) RougeFonce else EncreDouce,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
+                    Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${p.prenom} : $gagnees gagnée${if (gagnees > 1) "s" else ""}, encore $restantes à gagner" +
+                                if (restantes <= 3) ". Pense à créer de nouvelles cartes !" else ".",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (restantes <= 3) RougeFonce else EncreDouce,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (restantes > 0) {
+                            TextButton(onClick = { offrirA = p }) { Text("Offrir") }
+                        }
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
                 BoutonSecondaire(texte = "Créer une carte", onClick = { vm.ouvrirNouvelleCarte() }, modifier = Modifier.fillMaxWidth())
@@ -198,6 +208,11 @@ fun EcranEspaceParent(vm: AppViewModel) {
             )
             Spacer(Modifier.height(16.dp))
         }
+    }
+
+    val enfant = offrirA
+    if (enfant != null) {
+        DialogueOffrirCarte(vm, enfant, onFermer = { offrirA = null })
     }
 
     if (confirmerDelier) {
@@ -274,4 +289,56 @@ private fun LigneSoir(profil: Profil, envoye: Boolean, onClick: () -> Unit) {
             }
         }
     }
+}
+
+/** Le parent offre une carte postale : au hasard, ou une carte choisie parmi celles que l'enfant n'a pas. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DialogueOffrirCarte(vm: AppViewModel, profil: Profil, onFermer: () -> Unit) {
+    val possibles = vm.cartesAGagner(profil.id)
+    AlertDialog(
+        onDismissRequest = onFermer,
+        title = { Text("Offrir une carte à ${profil.prenom}") },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 380.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    "Elle l'attendra sur son accueil, puis l'épinglera sur la carte d'Italie.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(10.dp))
+                BoutonPrincipal(
+                    texte = "Une carte au hasard",
+                    onClick = {
+                        vm.offrirCarte(profil, null)
+                        onFermer()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text("Ou choisis la ville :", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    for (carte in possibles) {
+                        Pastille(
+                            texte = carte.ville,
+                            choisie = false,
+                            onClick = {
+                                vm.offrirCarte(profil, carte)
+                                onFermer()
+                            },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onFermer) { Text("Annuler") } },
+        containerColor = Color.White,
+    )
 }
