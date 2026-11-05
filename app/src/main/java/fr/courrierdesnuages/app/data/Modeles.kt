@@ -4,7 +4,7 @@ import androidx.annotation.DrawableRes
 import fr.courrierdesnuages.app.R
 
 /** Les huit facteurs du ciel. La clé est ce qui est enregistré dans la base. */
-enum class Avatar(val cle: String, val nom: String, val engin: String, @DrawableRes val image: Int) {
+enum class Avatar(val cle: String, val nom: String, val engin: String, @param:DrawableRes val image: Int) {
     HERISSON("herisson", "Le hérisson", "en montgolfière", R.drawable.avatar_herisson),
     SOURIS("souris", "La souris", "en avion de papier", R.drawable.avatar_souris),
     OURS("ours", "L'ours", "en dirigeable", R.drawable.avatar_ours),

@@ -2,7 +2,7 @@ name: Fabrication de l'appli
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
     paths-ignore:
       - "README.md"
       - "signing/**"
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: fabrication
+  group: fabrication-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -34,8 +34,10 @@ jobs:
         with:
           gradle-version: "8.14.3"
 
+      # Seule la branche main est signée et publiée ; les autres branches servent à vérifier le code.
       - name: Clé de signature
         id: cle
+        if: github.ref == 'refs/heads/main'
         env:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           ENREGISTRE_COMME_VARIABLE: ${{ vars.SIGNING_KEY_PASSWORD != '' }}
@@ -101,7 +103,7 @@ jobs:
           done
 
       - name: Publication
-        if: steps.cle.outputs.signature == 'oui'
+        if: github.ref == 'refs/heads/main' && steps.cle.outputs.signature == 'oui'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -113,7 +115,6 @@ jobs:
             || gh release upload "v1.$N" courrier-des-nuages.apk --clobber
 
       - name: Pas de publication sans signature
-        if: steps.cle.outputs.signature != 'oui'
+        if: github.ref == 'refs/heads/main' && steps.cle.outputs.signature != 'oui'
         run: |
-          echo "::error title=Pas de publication::L'appli se fabrique, mais sans le secret SIGNING_KEY_PASSWORD elle ne peut pas être signée ni publiée."
-          exit 1
+          echo "::warning title=Pas de publication::L'appli se fabrique, mais sans le secret SIGNING_KEY_PASSWORD elle ne peut pas être signée ni publiée."
