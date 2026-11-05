@@ -38,14 +38,14 @@ jobs:
         id: cle
         env:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-          TOUS_LES_SECRETS: ${{ toJSON(secrets) }}
-          TOUTES_LES_VARIABLES: ${{ toJSON(vars) }}
+          ENREGISTRE_COMME_VARIABLE: ${{ vars.SIGNING_KEY_PASSWORD != '' }}
         run: |
           if [ -z "${SIGNING_KEY_PASSWORD:-}" ]; then
-            # Seuls les NOMS sont affichés, jamais les valeurs.
-            secrets=$(echo "$TOUS_LES_SECRETS" | jq -r 'keys | map(select(. != "github_token")) | join(", ")')
-            variables=$(echo "$TOUTES_LES_VARIABLES" | jq -r 'keys | join(", ")')
-            echo "::warning title=Mot de passe manquant::Secret SIGNING_KEY_PASSWORD introuvable. Secrets vus : [${secrets}]. Variables vues : [${variables}]."
+            if [ "$ENREGISTRE_COMME_VARIABLE" = "true" ]; then
+              echo "::warning title=Mot de passe mal rangé::SIGNING_KEY_PASSWORD est enregistré comme Variable : il faut le mettre dans l'onglet Secrets."
+            else
+              echo "::warning title=Mot de passe manquant::Secret SIGNING_KEY_PASSWORD introuvable dans Settings > Secrets and variables > Actions > Secrets."
+            fi
             echo "signature=non" >> "$GITHUB_OUTPUT"
             exit 0
           fi
