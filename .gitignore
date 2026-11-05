@@ -1,0 +1,9 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+# La clé de signature déchiffrée ne doit jamais être envoyée sur GitHub.
+signing/*.jks

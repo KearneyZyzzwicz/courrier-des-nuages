@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "911135035843",
+    "project_id": "courrier-des-nuages-9b6df",
+    "storage_bucket": "courrier-des-nuages-9b6df.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:911135035843:android:c73f8a6f2da80cf9512d76",
+        "android_client_info": {
+          "package_name": "fr.courrierdesnuages.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBF1Gd1nkp5s8lP5fLsrlMVmilp8oz8NvI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

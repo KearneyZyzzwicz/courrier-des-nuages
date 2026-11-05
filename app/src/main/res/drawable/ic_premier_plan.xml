@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icône de l'appli : un nuage et une enveloppe rouge. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M41,58 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,49 m-16,0 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M69,57 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,58 h42 a6,6 0 0,1 6,6 v0 a6,6 0 0,1 -6,6 h-42 a6,6 0 0,1 -6,-6 v0 a6,6 0 0,1 6,-6 z" />
+    <path
+        android:fillColor="#E4573D"
+        android:pathData="M41,57 h26 a2,2 0 0,1 2,2 v16 a2,2 0 0,1 -2,2 h-26 a2,2 0 0,1 -2,-2 v-16 a2,2 0 0,1 2,-2 z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineJoin="round"
+        android:pathData="M40,59 L54,69 L68,59" />
+</vector>
