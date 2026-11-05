@@ -21,10 +21,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Récupération du code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -35,19 +35,26 @@ jobs:
           gradle-version: "8.14.3"
 
       - name: Clé de signature
+        id: cle
         env:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          TOUS_LES_SECRETS: ${{ toJSON(secrets) }}
+          TOUTES_LES_VARIABLES: ${{ toJSON(vars) }}
         run: |
           if [ -z "${SIGNING_KEY_PASSWORD:-}" ]; then
-            echo "::error title=Mot de passe manquant::Ajoute le secret SIGNING_KEY_PASSWORD (Settings > Secrets and variables > Actions)."
-            exit 1
+            # Seuls les NOMS sont affichés, jamais les valeurs.
+            secrets=$(echo "$TOUS_LES_SECRETS" | jq -r 'keys | map(select(. != "github_token")) | join(", ")')
+            variables=$(echo "$TOUTES_LES_VARIABLES" | jq -r 'keys | join(", ")')
+            echo "::warning title=Mot de passe manquant::Secret SIGNING_KEY_PASSWORD introuvable. Secrets vus : [${secrets}]. Variables vues : [${variables}]."
+            echo "signature=non" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           mkdir -p signing
           if [ -f signing/keystore.enc ]; then
             openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:SIGNING_KEY_PASSWORD \
               -in signing/keystore.enc -out signing/release.jks
           else
-            # Toute première fabrication : on crée la clé, on la chiffre avec le mot de passe
+            # Toute première fabrication signée : on crée la clé, on la chiffre avec le mot de passe
             # et seule la version chiffrée est enregistrée dans le dépôt.
             keytool -genkeypair -storetype PKCS12 -keystore signing/release.jks -alias courrier \
               -keyalg RSA -keysize 4096 -validity 36500 \
@@ -61,14 +68,18 @@ jobs:
             git commit -m "Clé de signature chiffrée (créée automatiquement)"
             git push origin HEAD:main
           fi
+          echo "signature=oui" >> "$GITHUB_OUTPUT"
 
       - name: Fabrication de l'APK
         env:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
+          OPTION_CLE=""
+          if [ "${{ steps.cle.outputs.signature }}" = "oui" ]; then
+            OPTION_CLE="-PkeystorePath=$GITHUB_WORKSPACE/signing/release.jks"
+          fi
           gradle --no-daemon --console=plain assembleRelease \
-            -PversionCode=${{ github.run_number }} \
-            -PkeystorePath="$GITHUB_WORKSPACE/signing/release.jks" 2>&1 | tee gradle.log
+            -PversionCode=${{ github.run_number }} $OPTION_CLE 2>&1 | tee gradle.log
 
       - name: Erreurs de fabrication
         if: failure()
@@ -90,12 +101,19 @@ jobs:
           done
 
       - name: Publication
+        if: steps.cle.outputs.signature == 'oui'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           N=${{ github.run_number }}
           cp app/build/outputs/apk/release/app-release.apk courrier-des-nuages.apk
-          git log -1 --pretty=%s > notes.txt
+          git log -1 --pretty=%s "$GITHUB_SHA" > notes.txt
           gh release create "v1.$N" courrier-des-nuages.apk \
             --title "Version 1.$N" --notes-file notes.txt --target "$GITHUB_SHA" \
             || gh release upload "v1.$N" courrier-des-nuages.apk --clobber
+
+      - name: Pas de publication sans signature
+        if: steps.cle.outputs.signature != 'oui'
+        run: |
+          echo "::error title=Pas de publication::L'appli se fabrique, mais sans le secret SIGNING_KEY_PASSWORD elle ne peut pas être signée ni publiée."
+          exit 1
