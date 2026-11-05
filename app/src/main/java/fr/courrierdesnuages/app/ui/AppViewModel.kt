@@ -47,6 +47,7 @@ import fr.courrierdesnuages.app.maj.MiseAJour
 import fr.courrierdesnuages.app.maj.NouvelleVersion
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.son.Voix
+import fr.courrierdesnuages.app.suivi.Classement
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.io.File
@@ -72,10 +73,16 @@ sealed interface Ecran {
     data class Album(val idProfil: String) : Ecran
     data object MotsItalien : Ecran
     data object NouvelleCarte : Ecran
+    data class VoirClassement(val idProfil: String) : Ecran
+    data class Tournee(val idProfil: String) : Ecran
+    data class Suivi(val idProfil: String) : Ecran
 }
 
 /** Une carte offerte par le parent n'appartient à aucune semaine (elle n'empêche pas d'en gagner une). */
 const val SEMAINE_OFFERTE = "offerte"
+
+/** Les séances et les soirs d'un enfant depuis la rentrée, pour le suivi parent. */
+data class AnneeSuivie(val idProfil: String, val seances: List<Seance>, val soirs: List<Soir>)
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -153,6 +160,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var ecouteCartes: ListenerRegistration? = null
     private val ecoutesSemaines = HashMap<String, ListenerRegistration>()
     private val donneesParEnfant = HashMap<String, DonneesEnfant>()
+    private val recalculsLances = HashSet<String>()
     private var momentArrierePlan = 0L
     private var activiteExterne = false
     private var fichierMaj: File? = null
@@ -191,6 +199,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 profilsCharges = true
                 erreurDonnees = null
                 oublierEnfantsSupprimes()
+                recalculerSiBesoin()
                 synchroniserEcran()
             },
             erreur = { e -> erreurDonnees = messageErreurBase(e) },
@@ -268,6 +277,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CartePostaleVue -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Epingler -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Album -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.VoirClassement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.Tournee -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.Suivi -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
             is Ecran.FicheEnfant -> if (e.idProfil != null && profil(e.idProfil) == null) ecran = Ecran.EspaceParent
             is Ecran.CeSoir -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
             is Ecran.LectureListe -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
@@ -382,6 +394,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CartePostaleVue -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.Album(e.idProfil)
             is Ecran.Epingler -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Album -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.VoirClassement -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.Tournee -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.Suivi -> Ecran.EspaceParent
             Ecran.MotsItalien, Ecran.NouvelleCarte -> Ecran.EspaceParent
             else -> Ecran.ChoixProfil
         }
@@ -481,6 +496,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             profil.id,
             Soir(date = jour, mots = propres, tables = tables, envoyeLe = System.currentTimeMillis()),
         )
+        // Le soir précédent se ferme : une séance pas faite compte 0, une séance pas finie compte ce
+        // qui a été fait. Les compteurs de l'année sont recalculés en entier à cette occasion.
+        recalculer(profil.id, ouvert = jour)
         val parties = buildList {
             if (propres.isNotEmpty()) add("${propres.size} mots")
             if (tables.isNotEmpty()) add("${tables.size} table${if (tables.size > 1) "s" else ""}")
@@ -573,6 +591,46 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_FRANCAIS, aEcrire, aSupprimer)
+        compter(s.profil, s.versSeance())
+    }
+
+    /** Ajoute une séance terminée aux compteurs de l'année (classement, médailles, tournée des îles). */
+    private fun compter(profil: Profil, seance: Seance) {
+        val an = Jours.anneeScolaire(LocalDate.parse(seance.soir))
+        depot.ajouterAuxStats(profil.id, an, listOf(Classement.pourSeance(seance)))
+    }
+
+    /**
+     * Première ouverture de la version avec le classement (ou nouvelle année scolaire) : les compteurs
+     * de l'année sont calculés à partir des séances déjà faites.
+     */
+    private fun recalculerSiBesoin() {
+        for (p in profils) {
+            if (!p.stats.calcule && recalculsLances.add(p.id)) {
+                recalculer(p.id, ouvert = null, apresEchec = { recalculsLances.remove(p.id) })
+            }
+        }
+    }
+
+    /**
+     * Recalcule les compteurs de l'année à partir de toutes les séances et de tous les soirs depuis la
+     * rentrée. Seulement avec Internet, pour ne rien oublier : sans connexion, on réessaiera plus tard.
+     * [ouvert] est le soir encore ouvert (par défaut, le dernier envoyé).
+     */
+    private fun recalculer(idProfil: String, ouvert: String?, apresEchec: () -> Unit = {}) {
+        viewModelScope.launch {
+            val an = Jours.anneeScolaire()
+            val debut = Jours.rentree(an)
+            try {
+                val seances = depot.seancesDepuis(idProfil, debut, serveur = true)
+                val soirs = depot.soirsDepuis(idProfil, debut, serveur = true)
+                val dernier = ouvert ?: soirs.maxOfOrNull { it.date } ?: ""
+                depot.ecrireStats(idProfil, an, Classement.recalculer(seances, soirs, dernier))
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                apresEchec()
+            }
+        }
     }
 
     /** L'enfant arrête la dictée : le mot en cours compte 0, la séance se reprendra. */
@@ -674,6 +732,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_MATHS, aEcrire, aSupprimer)
+        compter(s.profil, s.versSeance())
     }
 
     /** L'enfant arrête le tri : le calcul en cours compte 0, la séance se reprendra. */
@@ -774,6 +833,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_ITALIEN, aEcrire, aSupprimer)
+        compter(s.profil, s.versSeance())
 
         // Les 5 mots de la semaine sus du premier coup : le pigeon apporte une carte postale,
         // dès que le dernier d'entre eux a été fait (le vendredi, ou le week-end pour un soir rattrapé).
@@ -853,6 +913,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ecran = Ecran.Album(profil.id)
     }
 
+    fun ouvrirClassement(profil: Profil) {
+        ecran = Ecran.VoirClassement(profil.id)
+    }
+
+    fun ouvrirTournee(profil: Profil) {
+        ecran = Ecran.Tournee(profil.id)
+    }
+
+    /** L'année du suivi parent (séances et soirs depuis la rentrée), lue à l'ouverture du suivi. */
+    var anneeSuivie by mutableStateOf<AnneeSuivie?>(null)
+        private set
+
+    fun ouvrirSuivi(profil: Profil) {
+        donnees(profil.id)
+        messageParent = null
+        if (anneeSuivie?.idProfil != profil.id) anneeSuivie = null
+        ecran = Ecran.Suivi(profil.id)
+        viewModelScope.launch {
+            val debut = Jours.rentree(Jours.anneeScolaire())
+            try {
+                val seances = depot.seancesDepuis(profil.id, debut, serveur = false)
+                val soirs = depot.soirsDepuis(profil.id, debut, serveur = false)
+                anneeSuivie = AnneeSuivie(profil.id, seances, soirs)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                // Sans l'année entière, le suivi montre les derniers jours (toujours à jour).
+            }
+        }
+    }
+
     fun retourAccueil(profil: Profil) {
         ecran = Ecran.AccueilEnfant(profil.id)
     }
@@ -901,6 +991,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (ecran != Ecran.Relier && ecran != Ecran.ChoixProfil) quitter()
         }
         if (erreurDonnees != null && Compte.estRelie) demarrerEcoute() else suivreSemaines()
+        recalculerSiBesoin()
         // L'appli reste souvent ouverte en arrière-plan : on regarde s'il y a une nouvelle version
         // en revenant dessus (au plus une fois toutes les 10 minutes).
         if (progressionMaj == null && SystemClock.elapsedRealtime() - dernierControleMaj > 10 * 60_000L) {

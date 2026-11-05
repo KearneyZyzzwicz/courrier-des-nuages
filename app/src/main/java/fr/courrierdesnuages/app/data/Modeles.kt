@@ -33,7 +33,42 @@ data class Profil(
     val liste: List<String> = emptyList(),
     /** Moment où la liste a été enregistrée (millisecondes). */
     val listeLe: Long = 0L,
-)
+    /** Les compteurs de l'année scolaire en cours (classement, médailles, tournée des îles). */
+    val stats: StatsAnnee = StatsAnnee(),
+    /** La collection de médailles par matière, toutes années confondues. */
+    val medailles: Map<String, MedaillesGagnees> = emptyMap(),
+) {
+    fun medaillesDe(matiere: String): MedaillesGagnees = medailles[matiere] ?: MedaillesGagnees()
+}
+
+data class MedaillesGagnees(val or: Long = 0, val argent: Long = 0)
+
+/** Points obtenus et points possibles d'une matière sur l'année scolaire, et médailles gagnées. */
+data class StatsMatiere(
+    val points: Double = 0.0,
+    val possibles: Double = 0.0,
+    val or: Long = 0,
+    val argent: Long = 0,
+) {
+    /** Le pourcentage de réussite, ou null tant qu'aucun jour n'a compté. */
+    val pourcentage: Double? get() = if (possibles > 0.0) points * 100.0 / possibles else null
+}
+
+data class StatsAnnee(
+    val francais: StatsMatiere = StatsMatiere(),
+    val maths: StatsMatiere = StatsMatiere(),
+    val italien: StatsMatiere = StatsMatiere(),
+    /** Chaque mot écrit juste est une lettre livrée, chaque calcul juste un colis trié. */
+    val livraisons: Long = 0,
+    /** Vrai une fois les compteurs calculés à partir des séances déjà faites. */
+    val calcule: Boolean = false,
+) {
+    fun matiere(m: String): StatsMatiere = when (m) {
+        Matiere.MATHS -> maths
+        Matiere.ITALIEN -> italien
+        else -> francais
+    }
+}
 
 /** Le code parent n'est jamais enregistré en clair : seulement son empreinte. */
 data class CodeParent(val empreinte: String, val sel: String)
