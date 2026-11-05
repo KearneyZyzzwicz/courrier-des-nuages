@@ -52,6 +52,7 @@ data class ResultatMot(val mot: String, val points: Double, val revision: Boolea
 object Matiere {
     const val FRANCAIS = "francais"
     const val MATHS = "maths"
+    const val ITALIEN = "italien"
 }
 
 object EtatSeance {

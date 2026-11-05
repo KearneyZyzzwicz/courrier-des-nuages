@@ -19,4 +19,6 @@ multiplication, mots d'italien. Chaque enfant a son profil, son avatar et son co
 
 - Polices [Fredoka](https://fonts.google.com/specimen/Fredoka) et [Andika](https://software.sil.org/andika/)
   (SIL Open Font License, voir `app/src/main/assets/licences`).
-- Illustrations (avatars, pigeon, cartes postales) créées pour le projet.
+- Illustrations (avatars, pigeon, avion, cartes postales) créées pour le projet.
+- Carte de l'Italie : limites des régions de l'[ISTAT](https://www.istat.it/) (licence CC BY),
+  via [openpolis/geojson-italy](https://github.com/openpolis/geojson-italy), simplifiées pour l'appli.

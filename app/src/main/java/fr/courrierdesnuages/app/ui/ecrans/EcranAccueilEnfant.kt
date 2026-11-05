@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.Mots
@@ -36,7 +37,10 @@ import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.AvatarAnime
+import fr.courrierdesnuages.app.italien.Semaines
+import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
 import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
+import java.time.LocalDate
 import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
@@ -144,7 +148,60 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
                 onClick = { vm.commencerCalcul(profil) },
             )
         }
-        TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Bientôt")
+        // Italien : le pigeon voyageur apporte le mot du soir, du lundi au vendredi.
+        val jour = Jours.aujourdhui()
+        val seanceItalien = donnees.seance(jour, Matiere.ITALIEN)
+        val lundi = Semaines.lundi(LocalDate.now()).toString()
+        val motsItalien = if (donnees.chargees) vm.motsDuSoirItalien(profil) else emptyList()
+        when {
+            !donnees.chargees || !vm.semaineChargee(lundi) ->
+                TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Ouverture…")
+            seanceItalien == null && Semaines.numeroDuJour(LocalDate.now()) > 5 ->
+                TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Repos le week-end")
+            seanceItalien == null && motsItalien.isEmpty() ->
+                TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Pas de mot ce soir")
+            seanceItalien == null -> TuileMatiere(
+                matiere = "Italien",
+                titre = if (motsItalien.size > 1) "Le mot du soir + ${motsItalien.size - 1} à revoir" else "Le mot du soir",
+                couleur = Jaune,
+                symbole = "Ciao",
+                etat = "C'est parti !",
+                onClick = { vm.commencerItalien(profil) },
+            )
+            !seanceItalien.terminee -> TuileMatiere(
+                matiere = "Italien",
+                titre = "Message ${seanceItalien.resultats.size + 1} sur ${seanceItalien.ordre.size}",
+                couleur = Jaune,
+                symbole = "Ciao",
+                etat = "Reprendre",
+                onClick = { vm.commencerItalien(profil) },
+            )
+            else -> TuileMatiere(
+                matiere = "Italien",
+                titre = "Fait : ${pointsEnTexte(seanceItalien.points)} / ${seanceItalien.ordre.size}",
+                couleur = Jaune,
+                symbole = "Ciao",
+                etat = "S'entraîner",
+                onClick = { vm.commencerItalien(profil) },
+            )
+        }
+
+        // L'album des cartes postales, et la carte qui attend d'être épinglée.
+        val aEpingler = donnees.cartesGagnees.firstOrNull { !it.epinglee }
+        if (aEpingler != null) {
+            Spacer(Modifier.height(8.dp))
+            BoutonPrincipal(
+                texte = "Une carte postale t'attend !",
+                onClick = { vm.ouvrirCarte(profil, aEpingler.idCarte, nouvelle = true) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        BoutonSecondaire(
+            texte = "Mon album d'Italie (${donnees.cartesGagnees.size} carte${if (donnees.cartesGagnees.size > 1) "s" else ""})",
+            onClick = { vm.ouvrirAlbum(profil) },
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(24.dp))
     }
 }

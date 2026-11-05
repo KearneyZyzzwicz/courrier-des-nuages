@@ -27,11 +27,22 @@ import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.data.REVISIONS_FRANCAIS
+import fr.courrierdesnuages.app.data.REVISIONS_ITALIEN
 import fr.courrierdesnuages.app.data.REVISIONS_MATHS
 import fr.courrierdesnuages.app.data.ResultatMot
 import fr.courrierdesnuages.app.data.Revision
+import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.dictee.SeanceDictee
+import fr.courrierdesnuages.app.italien.CARTES_INTEGREES
+import fr.courrierdesnuages.app.italien.CarteGagnee
+import fr.courrierdesnuages.app.italien.CartePostale
+import fr.courrierdesnuages.app.italien.MotItalien
+import fr.courrierdesnuages.app.italien.RecompenseItalien
+import fr.courrierdesnuages.app.italien.SeanceItalien
+import fr.courrierdesnuages.app.italien.SemaineItalien
+import fr.courrierdesnuages.app.italien.Semaines
+import fr.courrierdesnuages.app.italien.Ville
 import fr.courrierdesnuages.app.maj.MiseAJour
 import fr.courrierdesnuages.app.maj.NouvelleVersion
 import fr.courrierdesnuages.app.son.Sons
@@ -39,6 +50,7 @@ import fr.courrierdesnuages.app.son.Voix
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.LocalDate
 
 /** Les écrans de l'appli. Les profils sont désignés par leur identifiant. */
 sealed interface Ecran {
@@ -54,6 +66,12 @@ sealed interface Ecran {
     data class LectureListe(val idProfil: String, val image: String?) : Ecran
     data class Dictee(val idProfil: String) : Ecran
     data class TriDesColis(val idProfil: String) : Ecran
+    data class Pigeon(val idProfil: String) : Ecran
+    data class CartePostaleVue(val idProfil: String, val idCarte: String, val nouvelle: Boolean) : Ecran
+    data class Epingler(val idProfil: String, val idCarte: String) : Ecran
+    data class Album(val idProfil: String) : Ecran
+    data object MotsItalien : Ecran
+    data object NouvelleCarte : Ecran
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -103,6 +121,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var seanceCalcul by mutableStateOf<SeanceCalcul?>(null)
         private set
 
+    // Pigeon voyageur en cours
+    var seanceItalien by mutableStateOf<SeanceItalien?>(null)
+        private set
+
+    /** Les semaines d'italien suivies (lundi → mots, ou null si le parent ne les a pas encore saisis). */
+    var semaines by mutableStateOf<Map<String, SemaineItalien?>>(emptyMap())
+        private set
+    var cartesDuParent by mutableStateOf<List<CartePostale>>(emptyList())
+        private set
+
+    /** Les 20 cartes livrées avec l'appli, puis celles créées par le parent. */
+    val toutesLesCartes: List<CartePostale> get() = CARTES_INTEGREES + cartesDuParent
+
     // Mises à jour
     var nouvelleVersion by mutableStateOf<NouvelleVersion?>(null)
         private set
@@ -116,6 +147,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var ecouteProfils: ListenerRegistration? = null
     private var ecouteCode: ListenerRegistration? = null
+    private var ecouteCartes: ListenerRegistration? = null
+    private val ecoutesSemaines = HashMap<String, ListenerRegistration>()
     private val donneesParEnfant = HashMap<String, DonneesEnfant>()
     private var momentArrierePlan = 0L
     private var activiteExterne = false
@@ -167,13 +200,42 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             },
             erreur = { e -> erreurDonnees = messageErreurBase(e) },
         )
+        ecouteCartes = depot.ecouterCartesDuParent(
+            rappel = { cartesDuParent = it },
+            erreur = { e -> erreurDonnees = messageErreurBase(e) },
+        )
+        suivreSemaines()
     }
+
+    /** Suit la semaine en cours et celle que le parent prépare (la suivante, le week-end). */
+    private fun suivreSemaines() {
+        if (!Compte.estRelie) return
+        val aujourdhui = LocalDate.now()
+        val voulues = setOf(Semaines.lundi(aujourdhui).toString(), Semaines.semaineAPreparer(aujourdhui).toString())
+        for (lundi in ecoutesSemaines.keys.filter { it !in voulues }) ecoutesSemaines.remove(lundi)?.remove()
+        for (lundi in voulues.filter { it !in ecoutesSemaines.keys }) {
+            ecoutesSemaines[lundi] = depot.ecouterSemaineItalien(
+                lundi,
+                rappel = { semaine -> semaines = semaines + (lundi to semaine) },
+                erreur = { e -> erreurDonnees = messageErreurBase(e) },
+            )
+        }
+    }
+
+    fun semaine(lundi: String): SemaineItalien? = semaines[lundi]
+
+    fun semaineChargee(lundi: String): Boolean = semaines.containsKey(lundi)
 
     private fun arreterEcoute() {
         ecouteProfils?.remove()
         ecouteCode?.remove()
+        ecouteCartes?.remove()
         ecouteProfils = null
         ecouteCode = null
+        ecouteCartes = null
+        ecoutesSemaines.values.forEach { it.remove() }
+        ecoutesSemaines.clear()
+        semaines = emptyMap()
         donneesParEnfant.values.forEach { it.arreter() }
         donneesParEnfant.clear()
     }
@@ -198,6 +260,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.AccueilEnfant -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Dictee -> if (profil(e.idProfil) == null) fermerDictee(Ecran.ChoixProfil)
             is Ecran.TriDesColis -> if (profil(e.idProfil) == null) fermerCalcul(Ecran.ChoixProfil)
+            is Ecran.Pigeon -> if (profil(e.idProfil) == null) fermerItalien(Ecran.ChoixProfil)
+            is Ecran.CartePostaleVue -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.Epingler -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.Album -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.FicheEnfant -> if (e.idProfil != null && profil(e.idProfil) == null) ecran = Ecran.EspaceParent
             is Ecran.CeSoir -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
             is Ecran.LectureListe -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
@@ -241,6 +307,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun delierTelephone() {
         fermerDictee(Ecran.Relier)
         fermerCalcul(Ecran.Relier)
+        fermerItalien(Ecran.Relier)
         arreterEcoute()
         Compte.deconnecter()
         profils = emptyList()
@@ -283,6 +350,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun quitter() {
         fermerDictee(Ecran.ChoixProfil)
         fermerCalcul(Ecran.ChoixProfil)
+        fermerItalien(Ecran.ChoixProfil)
         messageParent = null
         ecran = Ecran.ChoixProfil
     }
@@ -303,6 +371,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 quitterCalcul()
                 return true
             }
+            is Ecran.Pigeon -> {
+                quitterItalien()
+                return true
+            }
+            is Ecran.CartePostaleVue -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.Album(e.idProfil)
+            is Ecran.Epingler -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.Album -> Ecran.AccueilEnfant(e.idProfil)
+            Ecran.MotsItalien, Ecran.NouvelleCarte -> Ecran.EspaceParent
             else -> Ecran.ChoixProfil
         }
         return true
@@ -610,6 +686,173 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ecran = suite
     }
 
+    // ---------- Le pigeon voyageur ----------
+
+    private fun seancesItalienDeLaSemaine(d: DonneesEnfant, lundi: String): List<Seance> {
+        val vendredi = LocalDate.parse(lundi).plusDays(4).toString()
+        return d.seances.filter { it.matiere == Matiere.ITALIEN && it.soir >= lundi && it.soir <= vendredi }
+    }
+
+    /** Les mots que le pigeon apportera ce soir (vide le week-end ou sans mots de la semaine). */
+    fun motsDuSoirItalien(profil: Profil): List<MotItalien> {
+        val d = donnees(profil.id)
+        val aujourdhui = LocalDate.now()
+        val semaine = semaine(Semaines.lundi(aujourdhui).toString()) ?: return emptyList()
+        val aRevoir = d.revisionsItalien.mapNotNull { MotItalien.lire(it.mot) }
+        return RecompenseItalien.motsDuSoir(semaine, aujourdhui, seancesItalienDeLaSemaine(d, semaine.lundi), aRevoir)
+    }
+
+    /**
+     * Ouvre le pigeon voyageur de ce soir : le mot du jour, plus ceux qui reviennent. La première séance
+     * compte (et se reprend), les suivantes sont des entraînements.
+     */
+    fun commencerItalien(profil: Profil) {
+        val d = donnees(profil.id)
+        val jour = Jours.aujourdhui()
+        val existante = d.seance(jour, Matiere.ITALIEN)
+        val maintenant = System.currentTimeMillis()
+        val seance = if (existante != null && !existante.terminee) {
+            SeanceItalien(
+                profil = profil,
+                soir = jour,
+                compte = true,
+                ordre = existante.ordre,
+                motsRevision = existante.revisions,
+                resultatsDeja = existante.resultats,
+                debutLe = existante.debutLe,
+                enregistrer = ::enregistrerProgressionItalien,
+                terminer = ::terminerItalien,
+            )
+        } else {
+            val mots = if (existante != null) existante.ordre else motsDuSoirItalien(profil).map { it.code }
+            if (mots.isEmpty()) return
+            SeanceItalien(
+                profil = profil,
+                soir = jour,
+                compte = existante == null,
+                ordre = mots,
+                motsRevision = mots.drop(1),
+                resultatsDeja = emptyList<ResultatMot>(),
+                debutLe = maintenant,
+                enregistrer = if (existante == null) ::enregistrerProgressionItalien else { _ -> },
+                terminer = if (existante == null) ::terminerItalien else { _ -> },
+            ).also { if (existante == null) enregistrerProgressionItalien(it) }
+        }
+        seanceItalien = seance
+        sons
+        ecran = Ecran.Pigeon(profil.id)
+    }
+
+    private fun enregistrerProgressionItalien(s: SeanceItalien) {
+        depot.enregistrerSeance(s.profil.id, s.versSeance())
+    }
+
+    /** Fin de la séance qui compte : mots qui reviendront demain, et peut-être la carte postale de la semaine. */
+    private fun terminerItalien(s: SeanceItalien) {
+        val d = donnees(s.profil.id)
+        val actuelles = d.revisionsItalien.associateBy { it.id }
+        val aEcrire = ArrayList<Revision>()
+        val aSupprimer = ArrayList<String>()
+        for (r in s.resultats) {
+            val cle = Mots.cle(r.mot)
+            if (r.points < 1.0) {
+                aEcrire += Revision(cle, r.mot, 0, s.soir) // pas su du premier coup : il revient le lendemain
+            } else if (actuelles.containsKey(cle)) {
+                aSupprimer += cle // enfin su du premier coup : il ne revient plus
+            }
+        }
+        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_ITALIEN, aEcrire, aSupprimer)
+
+        // Une semaine sans aucune faute vaut une carte postale, apportée après le dernier mot de la semaine.
+        val lundi = Semaines.lundi(LocalDate.parse(s.soir)).toString()
+        val semaine = semaine(lundi) ?: return
+        if (RecompenseItalien.dernierSoir(semaine) != s.soir) return
+        if (d.cartesGagnees.any { it.semaine == lundi }) return
+        val seances = seancesItalienDeLaSemaine(d, lundi).filter { it.soir != s.soir } + s.versSeance()
+        if (!RecompenseItalien.semaineParfaite(semaine, seances)) return
+        val carte = RecompenseItalien.tirerCarte(toutesLesCartes, d.cartesGagnees) ?: return
+        depot.enregistrerCarteGagnee(
+            s.profil.id,
+            CarteGagnee(carte.id, lundi, System.currentTimeMillis(), epinglee = false, bienPlacee = false),
+        )
+        s.carteGagnee = carte
+    }
+
+    fun quitterItalien() {
+        val id = seanceItalien?.profil?.id
+        fermerItalien(if (id != null) Ecran.AccueilEnfant(id) else Ecran.ChoixProfil)
+    }
+
+    private fun fermerItalien(suite: Ecran) {
+        val s = seanceItalien ?: return
+        s.quitteLAppli()
+        seanceItalien = null
+        ecran = suite
+    }
+
+    // ---------- Cartes postales et album ----------
+
+    fun carte(id: String): CartePostale? = toutesLesCartes.firstOrNull { it.id == id }
+
+    /** Les cartes qu'un enfant peut encore gagner. */
+    fun cartesRestantes(idProfil: String): Int {
+        val gagnees = donnees(idProfil).cartesGagnees.map { it.idCarte }.toSet()
+        return toutesLesCartes.count { it.id !in gagnees }
+    }
+
+    /** Après la séance : le pigeon apporte la carte gagnée. */
+    fun ouvrirCarteGagnee() {
+        val s = seanceItalien ?: return
+        val carte = s.carteGagnee ?: return
+        seanceItalien = null
+        ecran = Ecran.CartePostaleVue(s.profil.id, carte.id, nouvelle = true)
+    }
+
+    fun ouvrirCarte(profil: Profil, idCarte: String, nouvelle: Boolean) {
+        ecran = Ecran.CartePostaleVue(profil.id, idCarte, nouvelle)
+    }
+
+    fun ouvrirEpingle(profil: Profil, idCarte: String) {
+        ecran = Ecran.Epingler(profil.id, idCarte)
+    }
+
+    fun epingler(profil: Profil, idCarte: String, bienPlacee: Boolean) {
+        depot.marquerEpinglee(profil.id, idCarte, bienPlacee)
+    }
+
+    fun ouvrirAlbum(profil: Profil) {
+        donnees(profil.id)
+        ecran = Ecran.Album(profil.id)
+    }
+
+    fun retourAccueil(profil: Profil) {
+        ecran = Ecran.AccueilEnfant(profil.id)
+    }
+
+    // ---------- Italien : côté parent ----------
+
+    fun ouvrirMotsItalien() {
+        messageParent = null
+        ecran = Ecran.MotsItalien
+    }
+
+    fun enregistrerMotsItalien(lundi: String, mots: List<MotItalien>) {
+        depot.enregistrerSemaineItalien(SemaineItalien(lundi, mots))
+        messageParent = "Les mots d'italien de la semaine sont enregistrés."
+        ecran = Ecran.EspaceParent
+    }
+
+    fun ouvrirNouvelleCarte() {
+        messageParent = null
+        ecran = Ecran.NouvelleCarte
+    }
+
+    fun creerCarte(ville: Ville, texte: String, motFrancais: String, motItalien: String, image: String) {
+        depot.enregistrerCarteDuParent(ville.nom, ville.region, texte, motFrancais, motItalien, image)
+        messageParent = "La carte postale de ${ville.nom} est ajoutée."
+        ecran = Ecran.EspaceParent
+    }
+
     // ---------- Premier plan / arrière-plan ----------
 
     fun passeEnArrierePlan() {
@@ -617,6 +860,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Quitter l'appli pendant un mot ou un calcul : il compte 0.
         seanceDictee?.quitteLAppli()
         seanceCalcul?.quitteLAppli()
+        seanceItalien?.quitteLAppli()
         _voix?.taire()
         _sons?.arreterMoteur()
     }
@@ -628,7 +872,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (depuis != 0L && !activiteExterne && SystemClock.elapsedRealtime() - depuis > 30_000L) {
             if (ecran != Ecran.Relier && ecran != Ecran.ChoixProfil) quitter()
         }
-        if (erreurDonnees != null && Compte.estRelie) demarrerEcoute()
+        if (erreurDonnees != null && Compte.estRelie) demarrerEcoute() else suivreSemaines()
         if (attenteAutorisation && MiseAJour.peutInstaller(getApplication<Application>())) {
             attenteAutorisation = false
             messageMaj = null
