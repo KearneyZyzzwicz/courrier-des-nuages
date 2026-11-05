@@ -42,15 +42,19 @@ data class Calcul(val a: Int, val b: Int, val operation: Char) {
         }
 
         /**
-         * Tous les calculs des tables choisies, chacun posé au hasard dans un sens ou dans l'autre,
-         * dans un ordre aléatoire. Un calcul commun à deux tables (4 × 5 et 5 × 4) n'est posé qu'une fois.
+         * Tous les calculs des tables choisies, dans un ordre aléatoire, chacun posé au hasard dans un
+         * sens ou dans l'autre. Un calcul commun à deux tables est posé deux fois, une fois dans chaque
+         * sens : avec les tables de 4 et de 5, l'enfant aura 4 × 5 et 5 × 4.
          */
         fun pourLesTables(tables: List<String>, hasard: Random = Random.Default): List<Calcul> {
-            val vus = HashSet<Calcul>()
+            val dejaPose = HashMap<Calcul, Calcul>() // calcul canonique -> sens dans lequel il a été posé
             val calculs = ArrayList<Calcul>()
-            for (code in tables) {
+            for (code in tables.distinct()) {
                 for (c in table(code)) {
-                    if (vus.add(c.canonique)) calculs += if (hasard.nextBoolean()) c else c.retourne()
+                    val precedent = dejaPose[c.canonique]
+                    val pose = precedent?.retourne() ?: if (hasard.nextBoolean()) c else c.retourne()
+                    dejaPose[c.canonique] = pose
+                    calculs += pose
                 }
             }
             return calculs.shuffled(hasard)

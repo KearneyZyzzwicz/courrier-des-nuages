@@ -579,12 +579,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val actuelles = donnees(s.profil.id).revisionsMaths.associateBy { it.id }
         val aEcrire = ArrayList<Revision>()
         val aSupprimer = ArrayList<String>()
-        for (r in s.resultats) {
-            val calcul = Calcul.lire(r.mot) ?: continue
-            val texte = calcul.canonique.texte
+        // Un calcul posé dans les deux sens (4 × 5 et 5 × 4) n'est réussi que si les deux le sont.
+        val parCalcul = s.resultats
+            .mapNotNull { r -> Calcul.lire(r.mot)?.let { it.canonique.texte to r.points } }
+            .groupBy({ it.first }, { it.second })
+        for ((texte, points) in parCalcul) {
             val cle = Mots.cle(texte)
             val existante = actuelles[cle]
-            if (r.points < 1.0) {
+            if (points.any { it < 1.0 }) {
                 aEcrire += Revision(cle, texte, 0, s.soir)
             } else if (existante != null && existante.dernierJour != s.soir) {
                 val reussites = existante.reussitesDeSuite + 1
