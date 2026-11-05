@@ -29,8 +29,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Medaille
+import fr.courrierdesnuages.app.data.MedaillesGagnees
 import fr.courrierdesnuages.app.data.Profil
-import fr.courrierdesnuages.app.data.StatsMatiere
 import fr.courrierdesnuages.app.dictee.DessinMedaille
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -103,12 +103,12 @@ fun EcranClassement(vm: AppViewModel, profil: Profil) {
 private fun CollectionDeMedailles(profil: Profil) {
     Carte(Modifier.fillMaxWidth()) {
         Text("Ma collection de médailles", style = MaterialTheme.typography.titleLarge)
-        val francais = profil.stats.francais
-        val maths = profil.stats.maths
+        val francais = profil.medaillesDe(Matiere.FRANCAIS)
+        val maths = profil.medaillesDe(Matiere.MATHS)
         if (francais.or + francais.argent + maths.or + maths.argent == 0L) {
             Spacer(Modifier.height(6.dp))
             Text(
-                "Pas encore de médaille cette année. Une séance sans faute rapporte l'or, une seule faute l'argent.",
+                "Pas encore de médaille. Une séance sans faute rapporte l'or, une seule faute l'argent.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = EncreDouce,
             )
@@ -123,7 +123,7 @@ private fun CollectionDeMedailles(profil: Profil) {
 }
 
 @Composable
-private fun ColonneMedailles(titre: String, stats: StatsMatiere) {
+private fun ColonneMedailles(titre: String, stats: MedaillesGagnees) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(titre, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))

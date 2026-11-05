@@ -35,7 +35,13 @@ data class Profil(
     val listeLe: Long = 0L,
     /** Les compteurs de l'année scolaire en cours (classement, médailles, tournée des îles). */
     val stats: StatsAnnee = StatsAnnee(),
-)
+    /** La collection de médailles par matière, toutes années confondues. */
+    val medailles: Map<String, MedaillesGagnees> = emptyMap(),
+) {
+    fun medaillesDe(matiere: String): MedaillesGagnees = medailles[matiere] ?: MedaillesGagnees()
+}
+
+data class MedaillesGagnees(val or: Long = 0, val argent: Long = 0)
 
 /** Points obtenus et points possibles d'une matière sur l'année scolaire, et médailles gagnées. */
 data class StatsMatiere(

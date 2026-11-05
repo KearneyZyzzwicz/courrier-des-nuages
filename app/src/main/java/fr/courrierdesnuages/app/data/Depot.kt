@@ -88,6 +88,7 @@ class Depot {
                     liste = chaines(doc, "liste"),
                     listeLe = doc.getLong("listeLe") ?: 0L,
                     stats = lireStats(doc.get("annees") as? Map<*, *>, Jours.anneeScolaire()),
+                    medailles = lireMedailles(doc.get("annees") as? Map<*, *>),
                 )
             }
             rappel(liste.sortedWith(compareBy<Profil>({ it.ordre }, { it.prenom })))
@@ -414,6 +415,23 @@ class Depot {
     }
 
     // ---------- Compteurs de l'année (classement, médailles, tournée) ----------
+
+    /** Toutes les médailles gagnées, d'une année scolaire à l'autre : la collection ne se vide jamais. */
+    private fun lireMedailles(annees: Map<*, *>?): Map<String, MedaillesGagnees> {
+        val r = HashMap<String, MedaillesGagnees>()
+        for (annee in annees?.values.orEmpty()) {
+            val m = annee as? Map<*, *> ?: continue
+            for (matiere in listOf(Matiere.FRANCAIS, Matiere.MATHS)) {
+                val x = m[matiere] as? Map<*, *> ?: continue
+                val avant = r[matiere] ?: MedaillesGagnees()
+                r[matiere] = MedaillesGagnees(
+                    or = avant.or + ((x["or"] as? Number)?.toLong() ?: 0L),
+                    argent = avant.argent + ((x["argent"] as? Number)?.toLong() ?: 0L),
+                )
+            }
+        }
+        return r
+    }
 
     private fun lireStats(annees: Map<*, *>?, an: String): StatsAnnee {
         val m = annees?.get(an) as? Map<*, *> ?: return StatsAnnee()

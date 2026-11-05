@@ -1,6 +1,7 @@
 package fr.courrierdesnuages.app.suivi
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
@@ -137,7 +139,8 @@ private fun CarteDesIles(profil: Profil, livraisons: Long, modifier: Modifier = 
         )
         val tailleAvatar = 76.dp
         val tailleAvatarPx = with(densite) { tailleAvatar.toPx() }
-        val largeurEtiquette = largeur * 0.5f
+        val largeurEtiquette = largeur * 0.6f
+        val bord = with(densite) { 8.dp.toPx() }
 
         Box(
             Modifier
@@ -176,17 +179,26 @@ private fun CarteDesIles(profil: Profil, livraisons: Long, modifier: Modifier = 
                         dessinerIle(k, centres[k], rayon, atteinte = k <= atteinte, brume = k > atteinte + 1)
                     }
                 }
+                // Le nom de chaque île sur une étiquette blanche, par-dessus la route.
                 for (k in 0 until nombre) {
                     val c = centres[k]
-                    Text(
-                        if (k > atteinte + 1) "Dans la brume…" else Tournee.nom(k),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (k <= atteinte) Encre else EncreDouce,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .offset { IntOffset((c.x - largeurEtiquette / 2f).roundToInt(), (c.y + rayon * 0.95f).roundToInt()) }
+                    val gauche = (c.x - largeurEtiquette / 2f).coerceIn(bord, (largeur - largeurEtiquette - bord).coerceAtLeast(bord))
+                    Box(
+                        Modifier
+                            .offset { IntOffset(gauche.roundToInt(), (c.y + rayon * 0.92f).roundToInt()) }
                             .width(with(densite) { largeurEtiquette.toDp() }),
-                    )
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        Text(
+                            if (k > atteinte + 1) "Dans la brume…" else Tournee.nom(k),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (k <= atteinte) Encre else EncreDouce,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .background(Color.White.copy(alpha = if (k <= atteinte) 0.92f else 0.7f), RoundedCornerShape(50))
+                                .padding(horizontal = 10.dp, vertical = 3.dp),
+                        )
+                    }
                 }
                 AvatarAnime(
                     avatar = profil.avatar,
