@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.BanniereMiseAJour
@@ -42,6 +43,7 @@ import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
 import fr.courrierdesnuages.app.ui.theme.RougeFonce
+import fr.courrierdesnuages.app.ui.theme.Vert
 
 @Composable
 fun EcranEspaceParent(vm: AppViewModel) {
@@ -57,6 +59,36 @@ fun EcranEspaceParent(vm: AppViewModel) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             BanniereMiseAJour(vm)
+
+            val envoi = vm.messageParent
+            if (envoi != null) {
+                Surface(shape = RoundedCornerShape(18.dp), color = Vert, contentColor = Color.White) {
+                    Text(
+                        envoi,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    )
+                }
+            }
+
+            Carte(Modifier.fillMaxWidth()) {
+                Text("Saisie du soir", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(6.dp))
+                if (vm.profils.isEmpty()) {
+                    Text(
+                        "Ajoute d'abord les enfants ci-dessous.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = EncreDouce,
+                    )
+                }
+                val aujourdhui = Jours.aujourdhui()
+                for (p in vm.profils) {
+                    val envoye = vm.donnees(p.id).soir(aujourdhui) != null
+                    LigneSoir(p, envoye) { vm.ouvrirCeSoir(p) }
+                }
+            }
 
             Carte(Modifier.fillMaxWidth()) {
                 Text("Les enfants", style = MaterialTheme.typography.titleLarge)
@@ -76,16 +108,6 @@ fun EcranEspaceParent(vm: AppViewModel) {
                     texte = "Ajouter un enfant",
                     onClick = { vm.ouvrirFiche(null) },
                     modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            Carte(Modifier.fillMaxWidth()) {
-                Text("Saisie du soir", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Arrive à la prochaine étape : la photo de la liste de mots, les mots du soir, les tables et les mots d'italien.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = EncreDouce,
                 )
             }
 
@@ -170,6 +192,37 @@ private fun LigneEnfant(profil: Profil, onClick: () -> Unit) {
                 Text(profil.classe, style = MaterialTheme.typography.bodyMedium, color = EncreDouce)
             }
             Icon(Icons.Filled.Edit, contentDescription = "Modifier", tint = EncreDouce)
+        }
+    }
+}
+
+@Composable
+private fun LigneSoir(profil: Profil, envoye: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = CielBas,
+        contentColor = Encre,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            ImageAvatar(profil.avatar, taille = 48.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(profil.prenom, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (envoye) "Envoyé ce soir ✓" else "À préparer",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (envoye) Vert else EncreDouce,
+                )
+            }
+            Surface(shape = RoundedCornerShape(50), color = Encre, contentColor = Color.White) {
+                Text(
+                    "Ce soir",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
         }
     }
 }

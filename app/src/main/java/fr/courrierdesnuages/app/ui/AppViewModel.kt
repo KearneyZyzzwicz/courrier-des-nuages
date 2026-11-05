@@ -19,9 +19,18 @@ import fr.courrierdesnuages.app.data.CodeParent
 import fr.courrierdesnuages.app.data.Codes
 import fr.courrierdesnuages.app.data.Compte
 import fr.courrierdesnuages.app.data.Depot
+import fr.courrierdesnuages.app.data.DonneesEnfant
+import fr.courrierdesnuages.app.data.Jours
+import fr.courrierdesnuages.app.data.Matiere
+import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.data.Revision
+import fr.courrierdesnuages.app.data.Soir
+import fr.courrierdesnuages.app.dictee.SeanceDictee
 import fr.courrierdesnuages.app.maj.MiseAJour
 import fr.courrierdesnuages.app.maj.NouvelleVersion
+import fr.courrierdesnuages.app.son.Sons
+import fr.courrierdesnuages.app.son.Voix
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.io.File
@@ -36,6 +45,9 @@ sealed interface Ecran {
     data object EspaceParent : Ecran
     data class FicheEnfant(val idProfil: String?) : Ecran
     data class AccueilEnfant(val idProfil: String) : Ecran
+    data class CeSoir(val idProfil: String) : Ecran
+    data class LectureListe(val idProfil: String, val image: String?) : Ecran
+    data class Dictee(val idProfil: String) : Ecran
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -73,6 +85,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var erreurMotDePasse by mutableStateOf<String?>(null)
         private set
 
+    // Espace parent : message après un envoi
+    var messageParent by mutableStateOf<String?>(null)
+        private set
+
+    // Dictée en cours
+    var seanceDictee by mutableStateOf<SeanceDictee?>(null)
+        private set
+
     // Mises à jour
     var nouvelleVersion by mutableStateOf<NouvelleVersion?>(null)
         private set
@@ -86,9 +106,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var ecouteProfils: ListenerRegistration? = null
     private var ecouteCode: ListenerRegistration? = null
+    private val donneesParEnfant = HashMap<String, DonneesEnfant>()
     private var momentArrierePlan = 0L
+    private var activiteExterne = false
     private var fichierMaj: File? = null
     private var attenteAutorisation = false
+
+    private var _voix: Voix? = null
+    private var _sons: Sons? = null
+
+    /** La voix d'Android, préparée dès que l'enfant ouvre sa séance. */
+    val voix: Voix
+        get() = _voix ?: Voix(getApplication<Application>()).also { _voix = it }
+
+    val sons: Sons
+        get() = _sons ?: Sons(getApplication<Application>()).also { _sons = it }
 
     init {
         if (Compte.estRelie) demarrerEcoute()
@@ -96,6 +128,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun profil(id: String?): Profil? = profils.firstOrNull { it.id == id }
+
+    /** Les soirs, séances et mots à revoir d'un enfant (écoutés en direct dès le premier appel). */
+    fun donnees(idProfil: String): DonneesEnfant =
+        donneesParEnfant.getOrPut(idProfil) { DonneesEnfant(idProfil, depot) }
 
     // ---------- Données ----------
 
@@ -107,6 +143,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 profils = liste
                 profilsCharges = true
                 erreurDonnees = null
+                oublierEnfantsSupprimes()
                 synchroniserEcran()
             },
             erreur = { e -> erreurDonnees = messageErreurBase(e) },
@@ -127,6 +164,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ecouteCode?.remove()
         ecouteProfils = null
         ecouteCode = null
+        donneesParEnfant.values.forEach { it.arreter() }
+        donneesParEnfant.clear()
+    }
+
+    private fun oublierEnfantsSupprimes() {
+        val ids = profils.map { it.id }.toSet()
+        val partis = donneesParEnfant.keys.filter { it !in ids }
+        for (id in partis) donneesParEnfant.remove(id)?.arreter()
     }
 
     private fun messageErreurBase(e: Exception): String =
@@ -141,7 +186,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         when (val e = ecran) {
             is Ecran.CodeEnfant -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.AccueilEnfant -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.Dictee -> if (profil(e.idProfil) == null) fermerDictee(Ecran.ChoixProfil)
             is Ecran.FicheEnfant -> if (e.idProfil != null && profil(e.idProfil) == null) ecran = Ecran.EspaceParent
+            is Ecran.CeSoir -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
+            is Ecran.LectureListe -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
             is Ecran.NouveauCodeParent -> if (e.premiereFois && codeParent != null) ecran = Ecran.CodeDuParent
             else -> Unit
         }
@@ -180,6 +228,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun delierTelephone() {
+        fermerDictee(Ecran.Relier)
         arreterEcoute()
         Compte.deconnecter()
         profils = emptyList()
@@ -205,11 +254,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ecran = Ecran.FicheEnfant(profil?.id)
     }
 
+    fun ouvrirCeSoir(profil: Profil) {
+        donnees(profil.id)
+        messageParent = null
+        ecran = Ecran.CeSoir(profil.id)
+    }
+
+    fun ouvrirLecture(profil: Profil, image: String?) {
+        ecran = Ecran.LectureListe(profil.id, image)
+    }
+
     fun changerCodeParent() {
         ecran = Ecran.NouveauCodeParent(premiereFois = false)
     }
 
     fun quitter() {
+        fermerDictee(Ecran.ChoixProfil)
+        messageParent = null
         ecran = Ecran.ChoixProfil
     }
 
@@ -219,6 +280,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             Ecran.Relier, Ecran.ChoixProfil -> return false
             is Ecran.NouveauCodeParent -> if (e.premiereFois) Ecran.ChoixProfil else Ecran.EspaceParent
             is Ecran.FicheEnfant -> Ecran.EspaceParent
+            is Ecran.CeSoir -> Ecran.EspaceParent
+            is Ecran.LectureListe -> Ecran.CeSoir(e.idProfil)
+            is Ecran.Dictee -> {
+                quitterDictee()
+                return true
+            }
             else -> Ecran.ChoixProfil
         }
         return true
@@ -228,7 +295,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun verifierCodeEnfant(profil: Profil, code: String): Boolean {
         val bon = Codes.verifie(code, profil.codeSel, profil.codeEmpreinte)
-        if (bon) ecran = Ecran.AccueilEnfant(profil.id)
+        if (bon) {
+            donnees(profil.id)
+            voix // la voix met un moment à se préparer : on la lance tout de suite
+            ecran = Ecran.AccueilEnfant(profil.id)
+        }
         return bon
     }
 
@@ -290,22 +361,149 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun supprimerProfil(profil: Profil) {
-        depot.supprimerProfil(profil.id)
+        viewModelScope.launch { depot.supprimerProfil(profil.id) }
         ecran = Ecran.EspaceParent
+    }
+
+    // ---------- Saisie du soir ----------
+
+    /** Le parent enregistre la liste de la semaine (après la photo ou une correction). */
+    fun enregistrerListe(profil: Profil, mots: List<String>, retour: Boolean) {
+        depot.enregistrerListe(profil.id, Mots.sansDoublons(mots))
+        if (retour) ecran = Ecran.CeSoir(profil.id)
+    }
+
+    /** Envoie les mots de ce soir à l'enfant. */
+    fun envoyerSoir(profil: Profil, mots: List<String>) {
+        val propres = Mots.sansDoublons(mots)
+        if (propres.isEmpty()) return
+        val jour = Jours.aujourdhui()
+        val ancien = donnees(profil.id).soir(jour)
+        depot.enregistrerSoir(
+            profil.id,
+            Soir(date = jour, mots = propres, tables = ancien?.tables.orEmpty(), envoyeLe = System.currentTimeMillis()),
+        )
+        messageParent = "C'est envoyé : ${propres.size} mots pour ${profil.prenom} ce soir."
+        ecran = Ecran.EspaceParent
+    }
+
+    fun debutActiviteExterne() {
+        activiteExterne = true
+    }
+
+    fun finActiviteExterne() {
+        activiteExterne = false
+    }
+
+    // ---------- La dictée ----------
+
+    /**
+     * Ouvre la dictée du dernier soir envoyé. La première séance compte (et se reprend si elle a
+     * été interrompue) ; une fois terminée, les suivantes sont des entraînements.
+     */
+    fun commencerDictee(profil: Profil) {
+        val d = donnees(profil.id)
+        val soir = d.dernierSoir ?: return
+        if (soir.mots.isEmpty()) return
+        val existante = d.seance(soir.date, Matiere.FRANCAIS)
+        val revisions = d.revisions.map { it.mot }.filter { r -> soir.mots.none { Mots.identiques(it, r) } }
+        val maintenant = System.currentTimeMillis()
+        val seance = when {
+            existante != null && !existante.terminee -> SeanceDictee(
+                profil = profil,
+                soir = soir.date,
+                compte = true,
+                ordre = existante.ordre,
+                motsRevision = existante.revisions,
+                resultatsDeja = existante.resultats,
+                debutLe = existante.debutLe,
+                enregistrer = ::enregistrerProgression,
+                terminer = ::terminerDictee,
+            )
+            existante == null -> SeanceDictee(
+                profil = profil,
+                soir = soir.date,
+                compte = true,
+                ordre = Mots.sansDoublons(soir.mots + revisions).shuffled(),
+                motsRevision = revisions,
+                resultatsDeja = emptyList(),
+                debutLe = maintenant,
+                enregistrer = ::enregistrerProgression,
+                terminer = ::terminerDictee,
+            ).also { enregistrerProgression(it) }
+            else -> SeanceDictee(
+                profil = profil,
+                soir = soir.date,
+                compte = false,
+                ordre = Mots.sansDoublons(soir.mots + revisions).shuffled(),
+                motsRevision = revisions,
+                resultatsDeja = emptyList(),
+                debutLe = maintenant,
+                enregistrer = {},
+                terminer = {},
+            )
+        }
+        voix
+        sons
+        seanceDictee = seance
+        ecran = Ecran.Dictee(profil.id)
+    }
+
+    private fun enregistrerProgression(s: SeanceDictee) {
+        depot.enregistrerSeance(s.profil.id, s.versSeance())
+    }
+
+    /** Fin de la séance qui compte : points, médaille et mots à revoir. */
+    private fun terminerDictee(s: SeanceDictee) {
+        val actuelles = donnees(s.profil.id).revisions.associateBy { it.id }
+        val aEcrire = ArrayList<Revision>()
+        val aSupprimer = ArrayList<String>()
+        for (r in s.resultats) {
+            val cle = Mots.cle(r.mot)
+            val existante = actuelles[cle]
+            if (r.points < 1.0) {
+                // Raté (0,5 ou 0) : il revient les jours suivants, le compteur repart de zéro.
+                aEcrire += Revision(cle, Mots.normaliser(r.mot), 0, s.soir)
+            } else if (existante != null && existante.dernierJour != s.soir) {
+                // Réussi du premier coup : deux jours de suite et il est maîtrisé.
+                val reussites = existante.reussitesDeSuite + 1
+                if (reussites >= 2) aSupprimer += cle else aEcrire += existante.copy(reussitesDeSuite = reussites, dernierJour = s.soir)
+            }
+        }
+        depot.terminerSeance(s.profil.id, s.versSeance(), aEcrire, aSupprimer)
+    }
+
+    /** L'enfant arrête la dictée : le mot en cours compte 0, la séance se reprendra. */
+    fun quitterDictee() {
+        val id = seanceDictee?.profil?.id
+        fermerDictee(if (id != null) Ecran.AccueilEnfant(id) else Ecran.ChoixProfil)
+    }
+
+    private fun fermerDictee(suite: Ecran) {
+        val s = seanceDictee ?: return
+        s.quitteLAppli()
+        _voix?.taire()
+        _sons?.arreterMoteur()
+        seanceDictee = null
+        ecran = suite
     }
 
     // ---------- Premier plan / arrière-plan ----------
 
     fun passeEnArrierePlan() {
         momentArrierePlan = SystemClock.elapsedRealtime()
+        // Quitter l'appli pendant un mot : ce mot compte 0.
+        seanceDictee?.quitteLAppli()
+        _voix?.taire()
+        _sons?.arreterMoteur()
     }
 
     fun revientAuPremierPlan() {
         val depuis = momentArrierePlan
         momentArrierePlan = 0L
-        // Au-delà de 30 secondes hors de l'appli, la séance se referme.
-        if (depuis != 0L && SystemClock.elapsedRealtime() - depuis > 30_000L) {
-            if (ecran != Ecran.Relier && ecran != Ecran.ChoixProfil) ecran = Ecran.ChoixProfil
+        // Au-delà de 30 secondes hors de l'appli, la séance se referme (sauf photo de la liste en cours).
+        if (depuis != 0L && !activiteExterne && SystemClock.elapsedRealtime() - depuis > 30_000L) {
+            if (ecran != Ecran.Relier && ecran != Ecran.ChoixProfil) quitter()
         }
         if (erreurDonnees != null && Compte.estRelie) demarrerEcoute()
         if (attenteAutorisation && MiseAJour.peutInstaller(getApplication<Application>())) {
@@ -369,5 +567,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         arreterEcoute()
+        _voix?.liberer()
+        _sons?.liberer()
     }
 }
