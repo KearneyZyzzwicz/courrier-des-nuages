@@ -156,6 +156,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var momentArrierePlan = 0L
     private var activiteExterne = false
     private var fichierMaj: File? = null
+    private var dernierControleMaj = 0L
     private var attenteAutorisation = false
 
     private var _voix: Voix? = null
@@ -900,6 +901,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (ecran != Ecran.Relier && ecran != Ecran.ChoixProfil) quitter()
         }
         if (erreurDonnees != null && Compte.estRelie) demarrerEcoute() else suivreSemaines()
+        // L'appli reste souvent ouverte en arrière-plan : on regarde s'il y a une nouvelle version
+        // en revenant dessus (au plus une fois toutes les 10 minutes).
+        if (progressionMaj == null && SystemClock.elapsedRealtime() - dernierControleMaj > 10 * 60_000L) {
+            verifierMiseAJour(silencieux = true)
+        }
         if (attenteAutorisation && MiseAJour.peutInstaller(getApplication<Application>())) {
             attenteAutorisation = false
             messageMaj = null
@@ -910,6 +916,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // ---------- Mises à jour ----------
 
     fun verifierMiseAJour(silencieux: Boolean) {
+        dernierControleMaj = SystemClock.elapsedRealtime()
         viewModelScope.launch {
             if (!silencieux) messageMaj = "Recherche d'une nouvelle version…"
             val resultat = runCatching { MiseAJour.chercher() }
