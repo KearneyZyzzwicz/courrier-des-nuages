@@ -215,7 +215,7 @@ private fun DeroulementMot(seance: SeanceDictee, sons: Sons, voix: Voix) {
             }
         }
 
-        val message = seance.message ?: when (phase) {
+        val message = seance.message ?: voix.probleme ?: when (phase) {
             Phase.AVION -> "Lis bien le mot sur la banderole…"
             Phase.SAISIE -> "Écris le mot, puis appuie sur Valider."
             else -> ""

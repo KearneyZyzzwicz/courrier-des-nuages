@@ -297,7 +297,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val bon = Codes.verifie(code, profil.codeSel, profil.codeEmpreinte)
         if (bon) {
             donnees(profil.id)
-            voix // la voix met un moment à se préparer : on la lance tout de suite
+            // La voix et les bruitages mettent un moment à se préparer : on les lance tout de suite.
+            voix
+            sons
             ecran = Ecran.AccueilEnfant(profil.id)
         }
         return bon
