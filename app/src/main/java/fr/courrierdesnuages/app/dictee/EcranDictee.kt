@@ -68,6 +68,7 @@ import fr.courrierdesnuages.app.son.Voix
 import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
 import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
 import fr.courrierdesnuages.app.ui.composants.Carte
+import fr.courrierdesnuages.app.ui.composants.TamponBravo
 import fr.courrierdesnuages.app.ui.theme.Andika
 import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
@@ -202,7 +203,7 @@ private fun DeroulementMot(seance: SeanceDictee, sons: Sons, voix: Voix) {
                     },
                 )
                 Phase.RECOPIE -> ModeleARecopier(seance.mot, onEcouter = { voix.dire(seance.mot) })
-                Phase.BRAVO -> Tampon(
+                Phase.BRAVO -> TamponBravo(
                     texte = when {
                         seance.enRattrapage || !seance.compte -> "Juste !"
                         seance.dernierPoint >= 1.0 -> "+1 point"
@@ -348,38 +349,6 @@ private fun ModeleARecopier(mot: String, onEcouter: () -> Unit) {
             Icon(painterResource(R.drawable.ic_ecouter), contentDescription = null, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(6.dp))
             Text("Réécouter")
-        }
-    }
-}
-
-/** Le coup de tampon quand le mot est juste. */
-@Composable
-private fun Tampon(texte: String, sons: Sons, onFini: () -> Unit) {
-    val fini by rememberUpdatedState(onFini)
-    val echelle = remember { Animatable(1.9f) }
-    val opacite = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        launch { opacite.animateTo(1f, tween(110)) }
-        echelle.animateTo(1f, tween(230, easing = FastOutLinearInEasing))
-        sons.coupDeTampon()
-        delay(950)
-        fini()
-    }
-    Box(
-        Modifier
-            .graphicsLayer {
-                scaleX = echelle.value
-                scaleY = echelle.value
-                alpha = opacite.value
-                rotationZ = -9f
-            }
-            .border(4.dp, Rouge, RoundedCornerShape(16.dp))
-            .padding(horizontal = 26.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("BRAVO !", style = MaterialTheme.typography.displaySmall, color = Rouge)
-            Text(texte, style = MaterialTheme.typography.titleLarge, color = Rouge)
         }
     }
 }
