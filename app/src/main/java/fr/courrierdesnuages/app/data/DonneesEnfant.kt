@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.firebase.firestore.ListenerRegistration
 
-/** Les soirs, séances et mots à revoir d'un enfant, tenus à jour en direct. */
+/** Les soirs, séances, mots et calculs à revoir d'un enfant, tenus à jour en direct. */
 class DonneesEnfant(val idProfil: String, depot: Depot) {
 
     var soirs by mutableStateOf<List<Soir>>(emptyList())
@@ -14,16 +14,20 @@ class DonneesEnfant(val idProfil: String, depot: Depot) {
         private set
     var revisions by mutableStateOf<List<Revision>>(emptyList())
         private set
+    var revisionsMaths by mutableStateOf<List<Revision>>(emptyList())
+        private set
     var soirsCharges by mutableStateOf(false)
         private set
     var seancesChargees by mutableStateOf(false)
         private set
     var revisionsChargees by mutableStateOf(false)
         private set
+    var revisionsMathsChargees by mutableStateOf(false)
+        private set
     var erreur by mutableStateOf<String?>(null)
         private set
 
-    val chargees: Boolean get() = soirsCharges && seancesChargees && revisionsChargees
+    val chargees: Boolean get() = soirsCharges && seancesChargees && revisionsChargees && revisionsMathsChargees
 
     /** Le dernier soir envoyé par le parent : c'est la séance ouverte jusqu'au soir suivant. */
     val dernierSoir: Soir? get() = soirs.firstOrNull()
@@ -36,7 +40,8 @@ class DonneesEnfant(val idProfil: String, depot: Depot) {
     private val ecoutes: List<ListenerRegistration> = listOf(
         depot.ecouterSoirs(idProfil, 21, { soirs = it; soirsCharges = true }, { erreur = it.message }),
         depot.ecouterSeances(idProfil, 40, { seances = it; seancesChargees = true }, { erreur = it.message }),
-        depot.ecouterRevisions(idProfil, { revisions = it; revisionsChargees = true }, { erreur = it.message }),
+        depot.ecouterRevisions(idProfil, REVISIONS_FRANCAIS, { revisions = it; revisionsChargees = true }, { erreur = it.message }),
+        depot.ecouterRevisions(idProfil, REVISIONS_MATHS, { revisionsMaths = it; revisionsMathsChargees = true }, { erreur = it.message }),
     )
 
     fun arreter() {
