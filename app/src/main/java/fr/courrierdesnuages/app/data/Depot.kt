@@ -9,10 +9,15 @@ import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
+import fr.courrierdesnuages.app.italien.CarteGagnee
+import fr.courrierdesnuages.app.italien.CartePostale
+import fr.courrierdesnuages.app.italien.MotItalien
+import fr.courrierdesnuages.app.italien.SemaineItalien
 import kotlinx.coroutines.tasks.await
 
 const val REVISIONS_FRANCAIS = "revisions"
 const val REVISIONS_MATHS = "revisionsMaths"
+const val REVISIONS_ITALIEN = "revisionsItalien"
 
 /** Le compte familial unique qui relie chaque téléphone à la base. */
 object Compte {
@@ -44,6 +49,10 @@ object Compte {
  * profils/{id}/seances/{jour_matiere}  la séance qui compte, mot par mot
  * profils/{id}/revisions/{clé}      les mots ratés à revoir
  * profils/{id}/revisionsMaths/{clé} les calculs ratés à revoir
+ * profils/{id}/revisionsItalien/{clé} les mots d'italien pas sus, qui reviennent le lendemain
+ * profils/{id}/cartes/{idCarte}     les cartes postales gagnées
+ * italien/{lundi}                   les 5 mots d'italien de la semaine, communs aux enfants
+ * cartes/{id}                       les cartes postales créées par le parent
  * reglages/parent                   l'empreinte du code parent
  */
 class Depot {
@@ -89,7 +98,7 @@ class Depot {
     suspend fun supprimerProfil(id: String) {
         val ref = profilRef(id)
         ref.delete()
-        for (sous in listOf("soirs", "seances", REVISIONS_FRANCAIS, REVISIONS_MATHS)) {
+        for (sous in listOf("soirs", "seances", REVISIONS_FRANCAIS, REVISIONS_MATHS, REVISIONS_ITALIEN, "cartes")) {
             val docs = runCatching { ref.collection(sous).get().await().documents }.getOrDefault(emptyList())
             for (d in docs) d.reference.delete()
         }
@@ -281,6 +290,123 @@ class Depot {
                 },
             )
         }
+
+    // ---------- Italien ----------
+
+    fun ecouterSemaineItalien(
+        lundi: String,
+        rappel: (SemaineItalien?) -> Unit,
+        erreur: (Exception) -> Unit,
+    ): ListenerRegistration =
+        db.collection("italien").document(lundi).addSnapshotListener { doc, e ->
+            if (e != null) {
+                erreur(e)
+                return@addSnapshotListener
+            }
+            if (doc == null || !doc.exists()) {
+                rappel(null)
+                return@addSnapshotListener
+            }
+            val mots = (doc.get("mots") as? List<*>).orEmpty().map { element ->
+                val m = element as? Map<*, *>
+                MotItalien(m?.get("fr") as? String ?: "", m?.get("it") as? String ?: "")
+            }
+            rappel(SemaineItalien(lundi, mots))
+        }
+
+    fun enregistrerSemaineItalien(semaine: SemaineItalien) {
+        db.collection("italien").document(semaine.lundi).set(
+            mapOf(
+                "lundi" to semaine.lundi,
+                "mots" to semaine.mots.map { mapOf("fr" to Mots.normaliser(it.francais), "it" to Mots.normaliser(it.italien)) },
+                "modifieLe" to System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    // ---------- Cartes postales ----------
+
+    fun ecouterCartesGagnees(
+        idProfil: String,
+        rappel: (List<CarteGagnee>) -> Unit,
+        erreur: (Exception) -> Unit,
+    ): ListenerRegistration =
+        profilRef(idProfil).collection("cartes").addSnapshotListener { instantane, e ->
+            if (e != null) {
+                erreur(e)
+                return@addSnapshotListener
+            }
+            rappel(
+                instantane?.documents.orEmpty().map { doc ->
+                    CarteGagnee(
+                        idCarte = doc.id,
+                        semaine = doc.getString("semaine").orEmpty(),
+                        gagneeLe = doc.getLong("gagneeLe") ?: 0L,
+                        epinglee = doc.getBoolean("epinglee") ?: false,
+                        bienPlacee = doc.getBoolean("bienPlacee") ?: false,
+                    )
+                }.sortedBy { it.gagneeLe },
+            )
+        }
+
+    fun enregistrerCarteGagnee(idProfil: String, carte: CarteGagnee) {
+        profilRef(idProfil).collection("cartes").document(carte.idCarte).set(
+            mapOf(
+                "semaine" to carte.semaine,
+                "gagneeLe" to carte.gagneeLe,
+                "epinglee" to carte.epinglee,
+                "bienPlacee" to carte.bienPlacee,
+            ),
+        )
+    }
+
+    fun marquerEpinglee(idProfil: String, idCarte: String, bienPlacee: Boolean) {
+        profilRef(idProfil).collection("cartes").document(idCarte).set(
+            mapOf("epinglee" to true, "bienPlacee" to bienPlacee),
+            SetOptions.merge(),
+        )
+    }
+
+    /** Les cartes créées par le parent, communes aux trois enfants (avec leur photo). */
+    fun ecouterCartesDuParent(
+        rappel: (List<CartePostale>) -> Unit,
+        erreur: (Exception) -> Unit,
+    ): ListenerRegistration =
+        db.collection("cartes").addSnapshotListener { instantane, e ->
+            if (e != null) {
+                erreur(e)
+                return@addSnapshotListener
+            }
+            rappel(
+                instantane?.documents.orEmpty().mapNotNull { doc ->
+                    val ville = doc.getString("ville") ?: return@mapNotNull null
+                    CartePostale(
+                        id = "parent-" + doc.id,
+                        ville = ville,
+                        region = doc.getString("region").orEmpty(),
+                        paragraphes = listOfNotNull(doc.getString("texte")?.takeIf { it.isNotBlank() }),
+                        motFrancais = doc.getString("motFrancais").orEmpty(),
+                        motItalien = doc.getString("motItalien").orEmpty(),
+                        legende = ville.uppercase(),
+                        image = doc.getString("image"),
+                    )
+                }.sortedBy { it.ville },
+            )
+        }
+
+    fun enregistrerCarteDuParent(ville: String, region: String, texte: String, motFrancais: String, motItalien: String, image: String) {
+        db.collection("cartes").document().set(
+            mapOf(
+                "ville" to ville,
+                "region" to region,
+                "texte" to texte.trim(),
+                "motFrancais" to Mots.normaliser(motFrancais),
+                "motItalien" to Mots.normaliser(motItalien),
+                "image" to image,
+                "creeLe" to System.currentTimeMillis(),
+            ),
+        )
+    }
 
     private fun chaines(doc: DocumentSnapshot, champ: String): List<String> =
         (doc.get(champ) as? List<*>).orEmpty().mapNotNull { it as? String }

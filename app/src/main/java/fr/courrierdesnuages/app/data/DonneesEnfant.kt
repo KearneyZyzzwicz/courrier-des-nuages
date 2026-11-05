@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.firebase.firestore.ListenerRegistration
+import fr.courrierdesnuages.app.italien.CarteGagnee
 
 /** Les soirs, séances, mots et calculs à revoir d'un enfant, tenus à jour en direct. */
 class DonneesEnfant(val idProfil: String, depot: Depot) {
@@ -16,6 +17,10 @@ class DonneesEnfant(val idProfil: String, depot: Depot) {
         private set
     var revisionsMaths by mutableStateOf<List<Revision>>(emptyList())
         private set
+    var revisionsItalien by mutableStateOf<List<Revision>>(emptyList())
+        private set
+    var cartesGagnees by mutableStateOf<List<CarteGagnee>>(emptyList())
+        private set
     var soirsCharges by mutableStateOf(false)
         private set
     var seancesChargees by mutableStateOf(false)
@@ -24,10 +29,16 @@ class DonneesEnfant(val idProfil: String, depot: Depot) {
         private set
     var revisionsMathsChargees by mutableStateOf(false)
         private set
+    var revisionsItalienChargees by mutableStateOf(false)
+        private set
+    var cartesChargees by mutableStateOf(false)
+        private set
     var erreur by mutableStateOf<String?>(null)
         private set
 
-    val chargees: Boolean get() = soirsCharges && seancesChargees && revisionsChargees && revisionsMathsChargees
+    val chargees: Boolean
+        get() = soirsCharges && seancesChargees && revisionsChargees && revisionsMathsChargees &&
+            revisionsItalienChargees && cartesChargees
 
     /** Le dernier soir envoyé par le parent : c'est la séance ouverte jusqu'au soir suivant. */
     val dernierSoir: Soir? get() = soirs.firstOrNull()
@@ -42,6 +53,8 @@ class DonneesEnfant(val idProfil: String, depot: Depot) {
         depot.ecouterSeances(idProfil, 40, { seances = it; seancesChargees = true }, { erreur = it.message }),
         depot.ecouterRevisions(idProfil, REVISIONS_FRANCAIS, { revisions = it; revisionsChargees = true }, { erreur = it.message }),
         depot.ecouterRevisions(idProfil, REVISIONS_MATHS, { revisionsMaths = it; revisionsMathsChargees = true }, { erreur = it.message }),
+        depot.ecouterRevisions(idProfil, REVISIONS_ITALIEN, { revisionsItalien = it; revisionsItalienChargees = true }, { erreur = it.message }),
+        depot.ecouterCartesGagnees(idProfil, { cartesGagnees = it; cartesChargees = true }, { erreur = it.message }),
     )
 
     fun arreter() {

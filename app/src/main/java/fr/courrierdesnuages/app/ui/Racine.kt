@@ -14,6 +14,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.courrierdesnuages.app.calcul.EcranTriDesColis
 import fr.courrierdesnuages.app.dictee.EcranDictee
+import fr.courrierdesnuages.app.italien.EcranAlbum
+import fr.courrierdesnuages.app.italien.EcranCartePostale
+import fr.courrierdesnuages.app.italien.EcranEpingler
+import fr.courrierdesnuages.app.italien.EcranPigeon
 import fr.courrierdesnuages.app.ui.composants.FondCiel
 import fr.courrierdesnuages.app.ui.ecrans.EcranAccueilEnfant
 import fr.courrierdesnuages.app.ui.ecrans.EcranChoixProfil
@@ -24,6 +28,8 @@ import fr.courrierdesnuages.app.ui.ecrans.EcranFicheEnfant
 import fr.courrierdesnuages.app.ui.ecrans.EcranNouveauCodeParent
 import fr.courrierdesnuages.app.ui.ecrans.EcranRelier
 import fr.courrierdesnuages.app.ui.parent.EcranCeSoir
+import fr.courrierdesnuages.app.ui.parent.EcranMotsItalien
+import fr.courrierdesnuages.app.ui.parent.EcranNouvelleCarte
 import fr.courrierdesnuages.app.ui.parent.EcranLectureListe
 
 @Composable
@@ -82,5 +88,32 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
             val s = vm.seanceCalcul
             if (s != null) EcranTriDesColis(seance = s, sons = vm.sons, onQuitter = { vm.quitterCalcul() })
         }
+        is Ecran.Pigeon -> {
+            val s = vm.seanceItalien
+            if (s != null) {
+                EcranPigeon(
+                    seance = s,
+                    sons = vm.sons,
+                    onQuitter = { vm.quitterItalien() },
+                    onOuvrirCarte = { vm.ouvrirCarteGagnee() },
+                )
+            }
+        }
+        is Ecran.CartePostaleVue -> {
+            val p = vm.profil(e.idProfil)
+            val carte = vm.carte(e.idCarte)
+            if (p != null && carte != null) EcranCartePostale(vm, p, carte, e.nouvelle)
+        }
+        is Ecran.Epingler -> {
+            val p = vm.profil(e.idProfil)
+            val carte = vm.carte(e.idCarte)
+            if (p != null && carte != null) EcranEpingler(vm, p, carte)
+        }
+        is Ecran.Album -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranAlbum(vm, p)
+        }
+        Ecran.MotsItalien -> EcranMotsItalien(vm)
+        Ecran.NouvelleCarte -> EcranNouvelleCarte(vm)
     }
 }

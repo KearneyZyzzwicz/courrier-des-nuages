@@ -30,7 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
 import fr.courrierdesnuages.app.data.Jours
+import fr.courrierdesnuages.app.italien.Semaines
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.BanniereMiseAJour
@@ -88,6 +90,53 @@ fun EcranEspaceParent(vm: AppViewModel) {
                     val envoye = vm.donnees(p.id).soir(aujourdhui) != null
                     LigneSoir(p, envoye) { vm.ouvrirCeSoir(p) }
                 }
+            }
+
+            Carte(Modifier.fillMaxWidth()) {
+                Text("Italien de la semaine", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(6.dp))
+                val lundi = Semaines.semaineAPreparer(LocalDate.now()).toString()
+                val semaine = vm.semaine(lundi)
+                val nombre = semaine?.mots?.count { it.complet } ?: 0
+                Text(
+                    when {
+                        !vm.semaineChargee(lundi) -> "Chargement…"
+                        nombre == 0 -> "Semaine du ${Jours.enClair(lundi)} : les 5 mots ne sont pas encore saisis."
+                        else -> "Semaine du ${Jours.enClair(lundi)} : " +
+                            semaine?.mots?.filter { it.complet }?.joinToString(", ") { it.italien }.orEmpty() + "."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = EncreDouce,
+                )
+                Spacer(Modifier.height(10.dp))
+                BoutonPrincipal(
+                    texte = if (nombre == 0) "Saisir les 5 mots" else "Modifier les mots",
+                    onClick = { vm.ouvrirMotsItalien() },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            Carte(Modifier.fillMaxWidth()) {
+                Text("Cartes postales", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${vm.toutesLesCartes.size} cartes à gagner, dont ${vm.cartesDuParent.size} créée${if (vm.cartesDuParent.size > 1) "s" else ""} par toi.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = EncreDouce,
+                )
+                for (p in vm.profils) {
+                    val restantes = vm.cartesRestantes(p.id)
+                    val gagnees = vm.donnees(p.id).cartesGagnees.size
+                    Text(
+                        "${p.prenom} : $gagnees gagnée${if (gagnees > 1) "s" else ""}, encore $restantes à gagner" +
+                            if (restantes <= 3) ". Pense à créer de nouvelles cartes !" else ".",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (restantes <= 3) RougeFonce else EncreDouce,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                BoutonSecondaire(texte = "Créer une carte", onClick = { vm.ouvrirNouvelleCarte() }, modifier = Modifier.fillMaxWidth())
             }
 
             Carte(Modifier.fillMaxWidth()) {
