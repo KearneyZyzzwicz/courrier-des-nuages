@@ -68,49 +68,53 @@ object Semaines {
 
 object RecompenseItalien {
 
+    /** Les mots de la semaine déjà travaillés (présents dans une séance de la semaine), par leur code. */
+    private fun dejaTravailles(seancesDeLaSemaine: List<Seance>): Set<String> =
+        seancesDeLaSemaine.flatMap { s -> s.resultats.map { it.mot } }.toSet()
+
     /**
-     * Les mots du soir : le mot du jour, plus les mots pas sus du premier coup qui reviennent,
-     * plus les mots des soirs précédents de la semaine qui n'ont pas été faits.
+     * Les mots de la séance : le mot du jour (du lundi au vendredi), les mots de la semaine pas encore
+     * travaillés (un soir sans séance ne compte pas comme une faute : son mot attend), et les mots pas
+     * sus du premier coup, qui reviennent. Le week-end, il n'y a pas de nouveau mot, mais on peut
+     * rattraper ceux de la semaine et revoir ceux qui n'étaient pas sus.
      */
     fun motsDuSoir(
-        semaine: SemaineItalien,
+        semaine: SemaineItalien?,
         jour: LocalDate,
         seancesDeLaSemaine: List<Seance>,
         aRevoir: List<MotItalien>,
     ): List<MotItalien> {
         val numero = Semaines.numeroDuJour(jour)
-        if (numero > 5) return emptyList()
-        val duJour = semaine.motDuJour(numero) ?: return emptyList()
-        val oublies = (1 until numero).mapNotNull { n ->
-            val date = Semaines.lundi(jour).plusDays((n - 1).toLong()).toString()
-            val faite = seancesDeLaSemaine.any { it.soir == date && it.terminee }
-            if (faite) null else semaine.motDuJour(n)
+        val travailles = dejaTravailles(seancesDeLaSemaine)
+        val duJour = if (semaine != null && numero <= 5) semaine.motDuJour(numero) else null
+        val enAttente = if (semaine == null) {
+            emptyList()
+        } else {
+            (1 until minOf(numero, 6)).mapNotNull { n -> semaine.motDuJour(n) }.filter { it.code !in travailles }
         }
-        val tous = listOf(duJour) + aRevoir + oublies
+        val tous = listOfNotNull(duJour) + enAttente + aRevoir
         val vus = HashSet<String>()
         return tous.filter { vus.add(it.code) }
     }
 
-    /**
-     * Une semaine sans aucune faute : chaque soir qui avait un mot (du lundi au vendredi) a sa séance
-     * terminée, et chaque mot de chaque séance a été trouvé du premier coup.
-     */
-    fun semaineParfaite(semaine: SemaineItalien, seancesDeLaSemaine: List<Seance>): Boolean {
-        val lundi = LocalDate.parse(semaine.lundi)
-        val jours = (1..5).filter { semaine.motDuJour(it) != null }
-        if (jours.isEmpty()) return false
-        return jours.all { n ->
-            val date = lundi.plusDays((n - 1).toLong()).toString()
-            val seance = seancesDeLaSemaine.firstOrNull { it.soir == date }
-            seance != null && seance.terminee && seance.fautes == 0 && seance.resultats.isNotEmpty()
-        }
+    /** Le mot du jour s'il y en a un (du lundi au vendredi), sinon null. */
+    fun motDuJour(semaine: SemaineItalien?, jour: LocalDate): MotItalien? {
+        val numero = Semaines.numeroDuJour(jour)
+        return if (semaine != null && numero <= 5) semaine.motDuJour(numero) else null
     }
 
-    /** Le dernier soir de la semaine qui a un mot : c'est ce soir-là que la carte peut être gagnée. */
-    fun dernierSoir(semaine: SemaineItalien): String? {
-        val lundi = LocalDate.parse(semaine.lundi)
-        val n = (1..5).lastOrNull { semaine.motDuJour(it) != null } ?: return null
-        return lundi.plusDays((n - 1).toLong()).toString()
+    /**
+     * La carte postale : les mots de la semaine ont tous été travaillés, et chacun a été trouvé du
+     * premier coup la première fois qu'il a été demandé (quel que soit le jour).
+     */
+    fun semaineParfaite(semaine: SemaineItalien, seancesDeLaSemaine: List<Seance>): Boolean {
+        val mots = (1..5).mapNotNull { semaine.motDuJour(it) }.map { it.code }
+        if (mots.isEmpty()) return false
+        val premiereFois = HashMap<String, Double>()
+        for (s in seancesDeLaSemaine.sortedBy { it.soir }) {
+            for (r in s.resultats) premiereFois.putIfAbsent(r.mot, r.points)
+        }
+        return mots.all { premiereFois[it] == 1.0 }
     }
 
     /** Une carte au hasard parmi celles que l'enfant n'a pas encore. */

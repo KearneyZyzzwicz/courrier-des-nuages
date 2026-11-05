@@ -64,21 +64,24 @@ private val JOURS = listOf("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi")
 /** Le parent saisit les 5 mots d'italien de la semaine (les mêmes pour les trois enfants). */
 @Composable
 fun EcranMotsItalien(vm: AppViewModel) {
-    val lundi = remember { Semaines.semaineAPreparer(LocalDate.now()).toString() }
+    val aujourdhui = remember { LocalDate.now() }
+    val courante = Semaines.lundi(aujourdhui).toString()
+    val aPreparer = Semaines.semaineAPreparer(aujourdhui).toString()
+    // Le week-end, on prépare d'habitude la semaine suivante, mais on peut encore corriger la semaine en cours.
+    var lundi by remember { mutableStateOf(aPreparer) }
     val francais = remember { mutableStateListOf("", "", "", "", "") }
     val italien = remember { mutableStateListOf("", "", "", "", "") }
-    var initialise by remember { mutableStateOf(false) }
+    var remplisPour by remember { mutableStateOf<String?>(null) }
     val charge = vm.semaineChargee(lundi)
 
-    LaunchedEffect(charge) {
-        if (charge && !initialise) {
-            vm.semaine(lundi)?.mots?.forEachIndexed { i, m ->
-                if (i < 5) {
-                    francais[i] = m.francais
-                    italien[i] = m.italien
-                }
+    LaunchedEffect(lundi, charge) {
+        if (charge && remplisPour != lundi) {
+            val mots = vm.semaine(lundi)?.mots.orEmpty()
+            for (i in 0 until 5) {
+                francais[i] = mots.getOrNull(i)?.francais.orEmpty()
+                italien[i] = mots.getOrNull(i)?.italien.orEmpty()
             }
-            initialise = true
+            remplisPour = lundi
         }
     }
 
@@ -94,8 +97,15 @@ fun EcranMotsItalien(vm: AppViewModel) {
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            if (courante != aPreparer) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Pastille(texte = "Cette semaine", choisie = lundi == courante, onClick = { lundi = courante })
+                    Pastille(texte = "Semaine prochaine", choisie = lundi == aPreparer, onClick = { lundi = aPreparer })
+                }
+            }
             Text(
-                "Semaine du ${Jours.enClair(lundi)} : un mot par soir, du lundi au vendredi, pour les trois enfants. " +
+                "Semaine du ${Jours.enClair(lundi)} : un mot par jour, du lundi au vendredi, pour les trois enfants. " +
+                    "Le week-end, ils peuvent rattraper les mots pas encore faits. " +
                     "Écris l'italien avec l'article et les accents (« il gatto », « la città »).",
                 style = MaterialTheme.typography.bodyLarge,
                 color = EncreDouce,
