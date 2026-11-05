@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import fr.courrierdesnuages.app.calcul.EcranTriDesColis
 import fr.courrierdesnuages.app.dictee.EcranDictee
 import fr.courrierdesnuages.app.ui.composants.FondCiel
 import fr.courrierdesnuages.app.ui.ecrans.EcranAccueilEnfant
@@ -76,6 +77,10 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         is Ecran.Dictee -> {
             val s = vm.seanceDictee
             if (s != null) EcranDictee(seance = s, sons = vm.sons, voix = vm.voix, onQuitter = { vm.quitterDictee() })
+        }
+        is Ecran.TriDesColis -> {
+            val s = vm.seanceCalcul
+            if (s != null) EcranTriDesColis(seance = s, sons = vm.sons, onQuitter = { vm.quitterCalcul() })
         }
     }
 }

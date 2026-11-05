@@ -14,6 +14,8 @@ import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import fr.courrierdesnuages.app.BuildConfig
+import fr.courrierdesnuages.app.calcul.Calcul
+import fr.courrierdesnuages.app.calcul.SeanceCalcul
 import fr.courrierdesnuages.app.data.Avatar
 import fr.courrierdesnuages.app.data.CodeParent
 import fr.courrierdesnuages.app.data.Codes
@@ -24,6 +26,9 @@ import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.data.REVISIONS_FRANCAIS
+import fr.courrierdesnuages.app.data.REVISIONS_MATHS
+import fr.courrierdesnuages.app.data.ResultatMot
 import fr.courrierdesnuages.app.data.Revision
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.dictee.SeanceDictee
@@ -48,6 +53,7 @@ sealed interface Ecran {
     data class CeSoir(val idProfil: String) : Ecran
     data class LectureListe(val idProfil: String, val image: String?) : Ecran
     data class Dictee(val idProfil: String) : Ecran
+    data class TriDesColis(val idProfil: String) : Ecran
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -91,6 +97,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // Dictée en cours
     var seanceDictee by mutableStateOf<SeanceDictee?>(null)
+        private set
+
+    // Tri des colis en cours
+    var seanceCalcul by mutableStateOf<SeanceCalcul?>(null)
         private set
 
     // Mises à jour
@@ -187,6 +197,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CodeEnfant -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.AccueilEnfant -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Dictee -> if (profil(e.idProfil) == null) fermerDictee(Ecran.ChoixProfil)
+            is Ecran.TriDesColis -> if (profil(e.idProfil) == null) fermerCalcul(Ecran.ChoixProfil)
             is Ecran.FicheEnfant -> if (e.idProfil != null && profil(e.idProfil) == null) ecran = Ecran.EspaceParent
             is Ecran.CeSoir -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
             is Ecran.LectureListe -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
@@ -229,6 +240,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun delierTelephone() {
         fermerDictee(Ecran.Relier)
+        fermerCalcul(Ecran.Relier)
         arreterEcoute()
         Compte.deconnecter()
         profils = emptyList()
@@ -270,6 +282,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun quitter() {
         fermerDictee(Ecran.ChoixProfil)
+        fermerCalcul(Ecran.ChoixProfil)
         messageParent = null
         ecran = Ecran.ChoixProfil
     }
@@ -284,6 +297,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.LectureListe -> Ecran.CeSoir(e.idProfil)
             is Ecran.Dictee -> {
                 quitterDictee()
+                return true
+            }
+            is Ecran.TriDesColis -> {
+                quitterCalcul()
                 return true
             }
             else -> Ecran.ChoixProfil
@@ -375,17 +392,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (retour) ecran = Ecran.CeSoir(profil.id)
     }
 
-    /** Envoie les mots de ce soir à l'enfant. */
-    fun envoyerSoir(profil: Profil, mots: List<String>) {
+    /** Envoie les mots et les tables de ce soir à l'enfant. */
+    fun envoyerSoir(profil: Profil, mots: List<String>, tables: List<String>) {
         val propres = Mots.sansDoublons(mots)
-        if (propres.isEmpty()) return
+        if (propres.isEmpty() && tables.isEmpty()) return
         val jour = Jours.aujourdhui()
-        val ancien = donnees(profil.id).soir(jour)
         depot.enregistrerSoir(
             profil.id,
-            Soir(date = jour, mots = propres, tables = ancien?.tables.orEmpty(), envoyeLe = System.currentTimeMillis()),
+            Soir(date = jour, mots = propres, tables = tables, envoyeLe = System.currentTimeMillis()),
         )
-        messageParent = "C'est envoyé : ${propres.size} mots pour ${profil.prenom} ce soir."
+        val parties = buildList {
+            if (propres.isNotEmpty()) add("${propres.size} mots")
+            if (tables.isNotEmpty()) add("${tables.size} table${if (tables.size > 1) "s" else ""}")
+        }
+        messageParent = "C'est envoyé : ${parties.joinToString(" et ")} pour ${profil.prenom} ce soir."
         ecran = Ecran.EspaceParent
     }
 
@@ -472,7 +492,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (reussites >= 2) aSupprimer += cle else aEcrire += existante.copy(reussitesDeSuite = reussites, dernierJour = s.soir)
             }
         }
-        depot.terminerSeance(s.profil.id, s.versSeance(), aEcrire, aSupprimer)
+        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_FRANCAIS, aEcrire, aSupprimer)
     }
 
     /** L'enfant arrête la dictée : le mot en cours compte 0, la séance se reprendra. */
@@ -490,12 +510,111 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ecran = suite
     }
 
+    // ---------- Le tri des colis ----------
+
+    /**
+     * Ouvre le tri des colis du dernier soir envoyé, s'il comporte des tables. Comme pour la dictée,
+     * la première séance compte, se reprend si elle a été interrompue, puis les suivantes sont des
+     * entraînements.
+     */
+    fun commencerCalcul(profil: Profil) {
+        val d = donnees(profil.id)
+        val soir = d.dernierSoir ?: return
+        if (soir.tables.isEmpty()) return
+        val existante = d.seance(soir.date, Matiere.MATHS)
+        val calculsDuSoir = Calcul.pourLesTables(soir.tables)
+        val dejaPoses = calculsDuSoir.map { it.canonique.texte }.toSet()
+        // Les calculs ratés les jours précédents reviennent, posés au hasard dans un sens ou dans l'autre.
+        val aRevoir = d.revisionsMaths.mapNotNull { Calcul.lire(it.mot) }
+            .filter { it.canonique.texte !in dejaPoses }
+            .map { if (Math.random() < 0.5) it else it.retourne() }
+        val revisions = aRevoir.map { it.canonique.texte }
+        val maintenant = System.currentTimeMillis()
+        val seance = when {
+            existante != null && !existante.terminee -> SeanceCalcul(
+                profil = profil,
+                soir = soir.date,
+                compte = true,
+                ordre = existante.ordre,
+                calculsRevision = existante.revisions,
+                resultatsDeja = existante.resultats,
+                debutLe = existante.debutLe,
+                enregistrer = ::enregistrerProgressionCalcul,
+                terminer = ::terminerCalcul,
+            )
+            existante == null -> SeanceCalcul(
+                profil = profil,
+                soir = soir.date,
+                compte = true,
+                ordre = (calculsDuSoir + aRevoir).shuffled().map { it.texte },
+                calculsRevision = revisions,
+                resultatsDeja = emptyList<ResultatMot>(),
+                debutLe = maintenant,
+                enregistrer = ::enregistrerProgressionCalcul,
+                terminer = ::terminerCalcul,
+            ).also { enregistrerProgressionCalcul(it) }
+            else -> SeanceCalcul(
+                profil = profil,
+                soir = soir.date,
+                compte = false,
+                ordre = (calculsDuSoir + aRevoir).shuffled().map { it.texte },
+                calculsRevision = revisions,
+                resultatsDeja = emptyList<ResultatMot>(),
+                debutLe = maintenant,
+                enregistrer = {},
+                terminer = {},
+            )
+        }
+        sons
+        seanceCalcul = seance
+        ecran = Ecran.TriDesColis(profil.id)
+    }
+
+    private fun enregistrerProgressionCalcul(s: SeanceCalcul) {
+        depot.enregistrerSeance(s.profil.id, s.versSeance())
+    }
+
+    /** Fin de la séance de maths qui compte : points, médaille et calculs à revoir. */
+    private fun terminerCalcul(s: SeanceCalcul) {
+        val actuelles = donnees(s.profil.id).revisionsMaths.associateBy { it.id }
+        val aEcrire = ArrayList<Revision>()
+        val aSupprimer = ArrayList<String>()
+        for (r in s.resultats) {
+            val calcul = Calcul.lire(r.mot) ?: continue
+            val texte = calcul.canonique.texte
+            val cle = Mots.cle(texte)
+            val existante = actuelles[cle]
+            if (r.points < 1.0) {
+                aEcrire += Revision(cle, texte, 0, s.soir)
+            } else if (existante != null && existante.dernierJour != s.soir) {
+                val reussites = existante.reussitesDeSuite + 1
+                if (reussites >= 2) aSupprimer += cle else aEcrire += existante.copy(reussitesDeSuite = reussites, dernierJour = s.soir)
+            }
+        }
+        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_MATHS, aEcrire, aSupprimer)
+    }
+
+    /** L'enfant arrête le tri : le calcul en cours compte 0, la séance se reprendra. */
+    fun quitterCalcul() {
+        val id = seanceCalcul?.profil?.id
+        fermerCalcul(if (id != null) Ecran.AccueilEnfant(id) else Ecran.ChoixProfil)
+    }
+
+    private fun fermerCalcul(suite: Ecran) {
+        val s = seanceCalcul ?: return
+        s.quitteLAppli()
+        _sons?.arreterMoteur()
+        seanceCalcul = null
+        ecran = suite
+    }
+
     // ---------- Premier plan / arrière-plan ----------
 
     fun passeEnArrierePlan() {
         momentArrierePlan = SystemClock.elapsedRealtime()
-        // Quitter l'appli pendant un mot : ce mot compte 0.
+        // Quitter l'appli pendant un mot ou un calcul : il compte 0.
         seanceDictee?.quitteLAppli()
+        seanceCalcul?.quitteLAppli()
         _voix?.taire()
         _sons?.arreterMoteur()
     }

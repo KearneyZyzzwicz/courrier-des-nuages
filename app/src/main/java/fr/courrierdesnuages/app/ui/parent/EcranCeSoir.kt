@@ -49,6 +49,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.courrierdesnuages.app.R
+import fr.courrierdesnuages.app.calcul.Calcul
+import fr.courrierdesnuages.app.calcul.FOIS
+import fr.courrierdesnuages.app.calcul.PLUS
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Mots
@@ -60,6 +63,7 @@ import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
 import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
 import fr.courrierdesnuages.app.ui.composants.Carte
 import fr.courrierdesnuages.app.ui.composants.ImageAvatar
+import fr.courrierdesnuages.app.ui.composants.Pastille
 import fr.courrierdesnuages.app.ui.theme.Andika
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
@@ -81,6 +85,7 @@ fun EcranCeSoir(vm: AppViewModel, profil: Profil) {
     val aujourdhui = remember { Jours.aujourdhui() }
     val soirDuJour = donnees.soir(aujourdhui)
     val choisis = remember { mutableStateListOf<String>() }
+    val tables = remember { mutableStateListOf<String>() }
     var initialise by remember { mutableStateOf(false) }
     var nouveauMot by remember { mutableStateOf("") }
     var probleme by remember { mutableStateOf<String?>(null) }
@@ -89,7 +94,10 @@ fun EcranCeSoir(vm: AppViewModel, profil: Profil) {
     // Ce soir déjà envoyé : on repart des mots envoyés pour pouvoir les modifier.
     LaunchedEffect(donnees.soirsCharges) {
         if (donnees.soirsCharges && !initialise) {
-            donnees.soir(aujourdhui)?.mots?.let { mots -> choisis.addAll(mots) }
+            donnees.soir(aujourdhui)?.let { soir ->
+                choisis.addAll(soir.mots)
+                tables.addAll(soir.tables)
+            }
             initialise = true
         }
     }
@@ -132,6 +140,10 @@ fun EcranCeSoir(vm: AppViewModel, profil: Profil) {
     val tousLesMots = Mots.sansDoublons(profil.liste + choisis)
     val aRevoir = donnees.revisions.map { it.mot }.filter { r -> choisis.none { Mots.identiques(it, r) } }
     val dejaFaite = donnees.seance(aujourdhui, Matiere.FRANCAIS)?.terminee == true
+    val mathsDejaFaites = donnees.seance(aujourdhui, Matiere.MATHS)?.terminee == true
+    // Des mots (de 3 à 20) et/ou des tables : un soir peut n'avoir que l'un des deux.
+    val motsValides = choisis.isEmpty() || choisis.size in MOTS_MIN..MOTS_MAX
+    val peutEnvoyer = motsValides && (choisis.isNotEmpty() || tables.isNotEmpty())
 
     Column(Modifier.fillMaxSize()) {
         BarreRetour("Ce soir · ${profil.prenom}", onRetour = { vm.retour() })
@@ -200,7 +212,7 @@ fun EcranCeSoir(vm: AppViewModel, profil: Profil) {
             Carte(Modifier.fillMaxWidth()) {
                 Text("Mots du jour", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Touche les mots à travailler ce soir (de $MOTS_MIN à $MOTS_MAX). ✓ : déjà donné cette semaine.",
+                    "Touche les mots à travailler ce soir (de $MOTS_MIN à $MOTS_MAX, ou aucun). ✓ : déjà donné cette semaine.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = EncreDouce,
                 )
@@ -250,22 +262,53 @@ fun EcranCeSoir(vm: AppViewModel, profil: Profil) {
 
             Carte(Modifier.fillMaxWidth()) {
                 Text("Tables de maths", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(4.dp))
-                Text("Arrivent à la prochaine étape.", style = MaterialTheme.typography.bodyMedium, color = EncreDouce)
+                Text(
+                    "Touche les tables à faire ce soir : 10 calculs par table. Aucune table : pas de séance de maths.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = EncreDouce,
+                )
+                for ((operation, titre) in listOf(FOIS to "Multiplication", PLUS to "Addition")) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(titre, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        for (n in 1..10) {
+                            val code = Calcul.codeTable(operation, n)
+                            Pastille(
+                                texte = "$operation$n",
+                                choisie = code in tables,
+                                onClick = { if (code in tables) tables.remove(code) else tables += code },
+                            )
+                        }
+                    }
+                }
+                if (tables.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    val calculs = Calcul.pourLesTables(tables).size
+                    Text(
+                        "$calculs calculs" + if (donnees.revisionsMaths.isNotEmpty()) ", plus ${donnees.revisionsMaths.size} à revoir." else ".",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Vert,
+                    )
+                }
             }
 
             if (soirDuJour != null) {
                 Text(
                     "Déjà envoyé ce soir à ${heure(soirDuJour.envoyeLe)}. Tu peux modifier puis renvoyer." +
-                        if (dejaFaite) " ${profil.prenom} a déjà fait la dictée : les nouveaux mots serviront d'entraînement." else "",
+                        (if (dejaFaite) " ${profil.prenom} a déjà fait la dictée : de nouveaux mots serviraient d'entraînement." else "") +
+                        (if (mathsDejaFaites) " Les maths sont déjà faites : de nouvelles tables serviraient d'entraînement." else ""),
                     style = MaterialTheme.typography.bodyMedium,
                     color = EncreDouce,
                 )
             }
             BoutonPrincipal(
                 texte = "Envoyer à ${profil.prenom}",
-                onClick = { vm.envoyerSoir(profil, choisis.toList()) },
-                actif = choisis.size in MOTS_MIN..MOTS_MAX,
+                onClick = { vm.envoyerSoir(profil, choisis.toList(), tables.toList()) },
+                actif = peutEnvoyer,
                 couleur = Vert,
                 modifier = Modifier.fillMaxWidth(),
             )

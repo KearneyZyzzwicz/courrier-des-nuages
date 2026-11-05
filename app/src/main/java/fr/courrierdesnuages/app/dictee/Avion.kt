@@ -62,10 +62,10 @@ private val CORDE = 30.dp
 private val MARGE_BANDEROLE = 22.dp
 private val TAILLE_MOT = 38.sp
 
-/** Durées du passage : l'avion arrive, ralentit au milieu pendant 3 s, puis repart. */
-private const val ARRIVEE_MS = 1100
-private const val LECTURE_MS = 3000
-private const val DEPART_MS = 1100
+/** Durées du passage : l'avion arrive vite, ralentit au milieu pendant 1 s, puis repart vite. */
+private const val ARRIVEE_MS = 700
+private const val LECTURE_MS = 1000
+private const val DEPART_MS = 700
 
 /**
  * L'avion traverse le ciel de droite à gauche en tirant la banderole du mot. Il ne repasse pas :
@@ -100,7 +100,7 @@ fun PassageAvion(
         val xDepart = largeur
         val xMilieu = largeur / 2f - avantBanderole - largeurBanderole / 2f
         val xFin = -(avantBanderole + largeurBanderole) - 20f
-        val derive = largeur * 0.05f
+        val derive = largeur * 0.03f
         val x = remember(passage) { Animatable(xDepart) }
 
         LaunchedEffect(passage) {

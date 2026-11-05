@@ -11,6 +11,9 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.tasks.await
 
+const val REVISIONS_FRANCAIS = "revisions"
+const val REVISIONS_MATHS = "revisionsMaths"
+
 /** Le compte familial unique qui relie chaque téléphone à la base. */
 object Compte {
     val estRelie: Boolean get() = Firebase.auth.currentUser != null
@@ -40,6 +43,7 @@ object Compte {
  * profils/{id}/soirs/{jour}         les mots (et plus tard les tables) envoyés ce soir-là
  * profils/{id}/seances/{jour_matiere}  la séance qui compte, mot par mot
  * profils/{id}/revisions/{clé}      les mots ratés à revoir
+ * profils/{id}/revisionsMaths/{clé} les calculs ratés à revoir
  * reglages/parent                   l'empreinte du code parent
  */
 class Depot {
@@ -85,7 +89,7 @@ class Depot {
     suspend fun supprimerProfil(id: String) {
         val ref = profilRef(id)
         ref.delete()
-        for (sous in listOf("soirs", "seances", "revisions")) {
+        for (sous in listOf("soirs", "seances", REVISIONS_FRANCAIS, REVISIONS_MATHS)) {
             val docs = runCatching { ref.collection(sous).get().await().documents }.getOrDefault(emptyList())
             for (d in docs) d.reference.delete()
         }
@@ -228,10 +232,14 @@ class Depot {
         profilRef(idProfil).collection("seances").document(seance.id).set(champsSeance(seance))
     }
 
-    /** Fin de séance : la séance et les mots à revoir sont enregistrés ensemble. */
+    /**
+     * Fin de séance : la séance et les mots (ou calculs) à revoir sont enregistrés ensemble.
+     * [collection] : [REVISIONS_FRANCAIS] ou [REVISIONS_MATHS].
+     */
     fun terminerSeance(
         idProfil: String,
         seance: Seance,
+        collection: String,
         revisionsAEcrire: List<Revision>,
         revisionsASupprimer: List<String>,
     ) {
@@ -240,22 +248,23 @@ class Depot {
         lot.set(ref.collection("seances").document(seance.id), champsSeance(seance))
         for (r in revisionsAEcrire) {
             lot.set(
-                ref.collection("revisions").document(r.id),
+                ref.collection(collection).document(r.id),
                 mapOf("mot" to r.mot, "reussitesDeSuite" to r.reussitesDeSuite, "dernierJour" to r.dernierJour),
             )
         }
-        for (id in revisionsASupprimer) lot.delete(ref.collection("revisions").document(id))
+        for (id in revisionsASupprimer) lot.delete(ref.collection(collection).document(id))
         lot.commit()
     }
 
-    // ---------- Mots à revoir ----------
+    // ---------- Mots et calculs à revoir ----------
 
     fun ecouterRevisions(
         idProfil: String,
+        collection: String,
         rappel: (List<Revision>) -> Unit,
         erreur: (Exception) -> Unit,
     ): ListenerRegistration =
-        profilRef(idProfil).collection("revisions").addSnapshotListener { instantane, e ->
+        profilRef(idProfil).collection(collection).addSnapshotListener { instantane, e ->
             if (e != null) {
                 erreur(e)
                 return@addSnapshotListener

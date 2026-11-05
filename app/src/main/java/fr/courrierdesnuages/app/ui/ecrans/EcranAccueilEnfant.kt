@@ -111,7 +111,39 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
                 onClick = { vm.commencerDictee(profil) },
             )
         }
-        TuileMatiere("Maths", "Le tri des colis", Vert, "+×", etat = "Bientôt")
+        // Maths : le tri des colis, seulement les soirs où des tables ont été choisies.
+        val seanceMaths = soir?.let { donnees.seance(it.date, Matiere.MATHS) }
+        val nombreDeTables = soir?.tables?.size ?: 0
+        when {
+            !donnees.chargees -> TuileMatiere("Maths", "Le tri des colis", Vert, "+×", etat = "Ouverture…")
+            nombreDeTables == 0 -> TuileMatiere("Maths", "Le tri des colis", Vert, "+×", etat = "Pas de tables ce soir")
+            seanceMaths == null -> TuileMatiere(
+                matiere = "Maths",
+                titre = "$nombreDeTables table${if (nombreDeTables > 1) "s" else ""}" +
+                    if (donnees.revisionsMaths.isNotEmpty()) " + ${donnees.revisionsMaths.size} à revoir" else "",
+                couleur = Vert,
+                symbole = "+×",
+                etat = "C'est parti !",
+                onClick = { vm.commencerCalcul(profil) },
+            )
+            !seanceMaths.terminee -> TuileMatiere(
+                matiere = "Maths",
+                titre = "Colis ${seanceMaths.resultats.size + 1} sur ${seanceMaths.ordre.size}",
+                couleur = Vert,
+                symbole = "+×",
+                etat = "Reprendre",
+                onClick = { vm.commencerCalcul(profil) },
+            )
+            else -> TuileMatiere(
+                matiere = "Maths",
+                titre = "Fait : ${pointsEnTexte(seanceMaths.points)} / ${seanceMaths.ordre.size}",
+                couleur = Vert,
+                symbole = "+×",
+                etat = "S'entraîner",
+                medaille = seanceMaths.medaille,
+                onClick = { vm.commencerCalcul(profil) },
+            )
+        }
         TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Bientôt")
         Spacer(Modifier.height(24.dp))
     }
