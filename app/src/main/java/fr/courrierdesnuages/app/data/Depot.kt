@@ -4,15 +4,19 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.firestore
 import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.italien.CartePostale
 import fr.courrierdesnuages.app.italien.MotItalien
 import fr.courrierdesnuages.app.italien.SemaineItalien
+import fr.courrierdesnuages.app.suivi.Ajout
+import fr.courrierdesnuages.app.suivi.parMatiere
 import kotlinx.coroutines.tasks.await
 
 const val REVISIONS_FRANCAIS = "revisions"
@@ -83,6 +87,7 @@ class Depot {
                     ordre = doc.getLong("ordre") ?: 0L,
                     liste = chaines(doc, "liste"),
                     listeLe = doc.getLong("listeLe") ?: 0L,
+                    stats = lireStats(doc.get("annees") as? Map<*, *>, Jours.anneeScolaire()),
                 )
             }
             rappel(liste.sortedWith(compareBy<Profil>({ it.ordre }, { it.prenom })))
@@ -154,18 +159,18 @@ class Depot {
                     erreur(e)
                     return@addSnapshotListener
                 }
-                rappel(
-                    instantane?.documents.orEmpty().mapNotNull { doc ->
-                        val date = doc.getString("date") ?: return@mapNotNull null
-                        Soir(
-                            date = date,
-                            mots = chaines(doc, "mots"),
-                            tables = chaines(doc, "tables"),
-                            envoyeLe = doc.getLong("envoyeLe") ?: 0L,
-                        )
-                    },
-                )
+                rappel(instantane?.documents.orEmpty().mapNotNull { lireSoir(it) })
             }
+
+    private fun lireSoir(doc: DocumentSnapshot): Soir? {
+        val date = doc.getString("date") ?: return null
+        return Soir(
+            date = date,
+            mots = chaines(doc, "mots"),
+            tables = chaines(doc, "tables"),
+            envoyeLe = doc.getLong("envoyeLe") ?: 0L,
+        )
+    }
 
     fun enregistrerSoir(idProfil: String, soir: Soir) {
         profilRef(idProfil).collection("soirs").document(soir.date).set(
@@ -407,6 +412,75 @@ class Depot {
             ),
         )
     }
+
+    // ---------- Compteurs de l'année (classement, médailles, tournée) ----------
+
+    private fun lireStats(annees: Map<*, *>?, an: String): StatsAnnee {
+        val m = annees?.get(an) as? Map<*, *> ?: return StatsAnnee()
+        fun matiere(cle: String): StatsMatiere {
+            val x = m[cle] as? Map<*, *> ?: return StatsMatiere()
+            return StatsMatiere(
+                points = (x["points"] as? Number)?.toDouble() ?: 0.0,
+                possibles = (x["possibles"] as? Number)?.toDouble() ?: 0.0,
+                or = (x["or"] as? Number)?.toLong() ?: 0L,
+                argent = (x["argent"] as? Number)?.toLong() ?: 0L,
+            )
+        }
+        return StatsAnnee(
+            francais = matiere(Matiere.FRANCAIS),
+            maths = matiere(Matiere.MATHS),
+            italien = matiere(Matiere.ITALIEN),
+            livraisons = (m["livraisons"] as? Number)?.toLong() ?: 0L,
+            calcule = m["calcule"] as? Boolean ?: false,
+        )
+    }
+
+    /**
+     * Ajoute une séance terminée aux compteurs de l'année. Les ajouts sont atomiques : plusieurs
+     * téléphones peuvent compter en même temps.
+     */
+    fun ajouterAuxStats(idProfil: String, an: String, ajouts: List<Ajout>) {
+        val champs = HashMap<String, Any>()
+        var livraisons = 0L
+        for ((matiere, a) in ajouts.parMatiere()) {
+            champs["annees.$an.$matiere.points"] = FieldValue.increment(a.points)
+            champs["annees.$an.$matiere.possibles"] = FieldValue.increment(a.possibles)
+            val or = ajouts.count { it.matiere == matiere && it.medaille == Medaille.OR }
+            val argent = ajouts.count { it.matiere == matiere && it.medaille == Medaille.ARGENT }
+            if (or > 0) champs["annees.$an.$matiere.or"] = FieldValue.increment(or.toLong())
+            if (argent > 0) champs["annees.$an.$matiere.argent"] = FieldValue.increment(argent.toLong())
+            livraisons += a.livraisons
+        }
+        if (livraisons > 0) champs["annees.$an.livraisons"] = FieldValue.increment(livraisons)
+        if (champs.isNotEmpty()) profilRef(idProfil).update(champs)
+    }
+
+    /** Remplace les compteurs de l'année par ceux recalculés à partir des séances et des soirs. */
+    fun ecrireStats(idProfil: String, an: String, stats: StatsAnnee) {
+        fun matiere(m: StatsMatiere) = mapOf("points" to m.points, "possibles" to m.possibles, "or" to m.or, "argent" to m.argent)
+        profilRef(idProfil).update(
+            mapOf(
+                "annees.$an" to mapOf(
+                    Matiere.FRANCAIS to matiere(stats.francais),
+                    Matiere.MATHS to matiere(stats.maths),
+                    Matiere.ITALIEN to matiere(stats.italien),
+                    "livraisons" to stats.livraisons,
+                    "calcule" to true,
+                ),
+            ),
+        )
+    }
+
+    /** Les séances depuis [debut]. Avec [serveur], seulement depuis Internet (sinon : échec), pour ne rien oublier. */
+    suspend fun seancesDepuis(idProfil: String, debut: String, serveur: Boolean): List<Seance> =
+        profilRef(idProfil).collection("seances").whereGreaterThanOrEqualTo("soir", debut)
+            .get(if (serveur) Source.SERVER else Source.DEFAULT).await()
+            .documents.mapNotNull { lireSeance(it) }
+
+    suspend fun soirsDepuis(idProfil: String, debut: String, serveur: Boolean): List<Soir> =
+        profilRef(idProfil).collection("soirs").whereGreaterThanOrEqualTo("date", debut)
+            .get(if (serveur) Source.SERVER else Source.DEFAULT).await()
+            .documents.mapNotNull { lireSoir(it) }
 
     private fun chaines(doc: DocumentSnapshot, champ: String): List<String> =
         (doc.get(champ) as? List<*>).orEmpty().mapNotNull { it as? String }

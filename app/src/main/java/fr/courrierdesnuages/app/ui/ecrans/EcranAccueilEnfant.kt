@@ -207,6 +207,18 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
             onClick = { vm.ouvrirAlbum(profil) },
             modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(8.dp))
+        BoutonSecondaire(
+            texte = "Ma tournée des îles",
+            onClick = { vm.ouvrirTournee(profil) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        BoutonSecondaire(
+            texte = "Classement et médailles",
+            onClick = { vm.ouvrirClassement(profil) },
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(24.dp))
     }
 }

@@ -18,6 +18,9 @@ import fr.courrierdesnuages.app.italien.EcranAlbum
 import fr.courrierdesnuages.app.italien.EcranCartePostale
 import fr.courrierdesnuages.app.italien.EcranEpingler
 import fr.courrierdesnuages.app.italien.EcranPigeon
+import fr.courrierdesnuages.app.suivi.EcranClassement
+import fr.courrierdesnuages.app.suivi.EcranSuivi
+import fr.courrierdesnuages.app.suivi.EcranTournee
 import fr.courrierdesnuages.app.ui.composants.FondCiel
 import fr.courrierdesnuages.app.ui.ecrans.EcranAccueilEnfant
 import fr.courrierdesnuages.app.ui.ecrans.EcranChoixProfil
@@ -115,5 +118,17 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         }
         Ecran.MotsItalien -> EcranMotsItalien(vm)
         Ecran.NouvelleCarte -> EcranNouvelleCarte(vm)
+        is Ecran.VoirClassement -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranClassement(vm, p)
+        }
+        is Ecran.Tournee -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranTournee(vm, p)
+        }
+        is Ecran.Suivi -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranSuivi(vm, p)
+        }
     }
 }

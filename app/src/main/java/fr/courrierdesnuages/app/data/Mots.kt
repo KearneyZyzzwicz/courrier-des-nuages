@@ -80,5 +80,12 @@ object Jours {
 
     fun aujourdhui(): String = LocalDate.now().toString()
 
+    /** L'année scolaire d'un jour, nommée par l'année de la rentrée (« 2026 » pour 2026-2027). */
+    fun anneeScolaire(jour: LocalDate = LocalDate.now()): String =
+        (if (jour.monthValue >= 9) jour.year else jour.year - 1).toString()
+
+    /** Le premier jour compté de l'année scolaire (le 1er septembre). */
+    fun rentree(annee: String): String = "$annee-09-01"
+
     fun enClair(jour: String): String = runCatching { LocalDate.parse(jour).format(joli) }.getOrDefault(jour)
 }

@@ -33,7 +33,9 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.italien.Semaines
+import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.BanniereMiseAJour
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -94,6 +96,16 @@ fun EcranEspaceParent(vm: AppViewModel) {
                 for (p in vm.profils) {
                     val envoye = vm.donnees(p.id).soir(aujourdhui) != null
                     LigneSoir(p, envoye) { vm.ouvrirCeSoir(p) }
+                }
+            }
+
+            if (vm.profils.isNotEmpty()) {
+                Carte(Modifier.fillMaxWidth()) {
+                    Text("Suivi des enfants", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    for (p in vm.profils) {
+                        LigneSuivi(p, resumeDuJour(vm, p)) { vm.ouvrirSuivi(p) }
+                    }
                 }
             }
 
@@ -256,6 +268,52 @@ private fun LigneEnfant(profil: Profil, onClick: () -> Unit) {
                 Text(profil.classe, style = MaterialTheme.typography.bodyMedium, color = EncreDouce)
             }
             Icon(Icons.Filled.Edit, contentDescription = "Modifier", tint = EncreDouce)
+        }
+    }
+}
+
+/** Où en sont les séances du jour : « Français ✓ · Maths à faire · Italien ✓ ». */
+private fun resumeDuJour(vm: AppViewModel, p: Profil): String {
+    val d = vm.donnees(p.id)
+    if (!d.chargees) return "Chargement…"
+    fun etat(s: Seance?): String = when {
+        s == null -> "à faire"
+        s.terminee -> "✓"
+        else -> "commencé"
+    }
+    val soir = d.dernierSoir
+    val parties = buildList {
+        if (soir != null && soir.mots.isNotEmpty()) add("Français " + etat(d.seance(soir.date, Matiere.FRANCAIS)))
+        if (soir != null && soir.tables.isNotEmpty()) add("Maths " + etat(d.seance(soir.date, Matiere.MATHS)))
+        val italien = d.seance(Jours.aujourdhui(), Matiere.ITALIEN)
+        if (italien != null || vm.motsDuSoirItalien(p).isNotEmpty()) add("Italien " + etat(italien))
+    }
+    return if (parties.isEmpty()) "Rien à faire aujourd'hui" else parties.joinToString(" · ")
+}
+
+@Composable
+private fun LigneSuivi(profil: Profil, resume: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = CielBas,
+        contentColor = Encre,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            ImageAvatar(profil.avatar, taille = 48.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(profil.prenom, style = MaterialTheme.typography.titleMedium)
+                Text(resume, style = MaterialTheme.typography.bodyMedium, color = EncreDouce)
+            }
+            Surface(shape = RoundedCornerShape(50), color = Encre, contentColor = Color.White) {
+                Text(
+                    "Voir",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
         }
     }
 }
