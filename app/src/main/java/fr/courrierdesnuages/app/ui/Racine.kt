@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import fr.courrierdesnuages.app.dictee.EcranDictee
 import fr.courrierdesnuages.app.ui.composants.FondCiel
 import fr.courrierdesnuages.app.ui.ecrans.EcranAccueilEnfant
 import fr.courrierdesnuages.app.ui.ecrans.EcranChoixProfil
@@ -21,6 +22,8 @@ import fr.courrierdesnuages.app.ui.ecrans.EcranEspaceParent
 import fr.courrierdesnuages.app.ui.ecrans.EcranFicheEnfant
 import fr.courrierdesnuages.app.ui.ecrans.EcranNouveauCodeParent
 import fr.courrierdesnuages.app.ui.ecrans.EcranRelier
+import fr.courrierdesnuages.app.ui.parent.EcranCeSoir
+import fr.courrierdesnuages.app.ui.parent.EcranLectureListe
 
 @Composable
 fun Racine(vm: AppViewModel = viewModel()) {
@@ -61,6 +64,18 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         is Ecran.AccueilEnfant -> {
             val p = vm.profil(e.idProfil)
             if (p != null) EcranAccueilEnfant(vm, p)
+        }
+        is Ecran.CeSoir -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranCeSoir(vm, p)
+        }
+        is Ecran.LectureListe -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranLectureListe(vm, p, e.image)
+        }
+        is Ecran.Dictee -> {
+            val s = vm.seanceDictee
+            if (s != null) EcranDictee(seance = s, sons = vm.sons, voix = vm.voix, onQuitter = { vm.quitterDictee() })
         }
     }
 }

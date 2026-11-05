@@ -22,6 +22,10 @@ android {
         targetSdk = 35
         versionCode = numeroVersion
         versionName = "1.$numeroVersion"
+        // Les téléphones de la famille sont des Motorola récents (processeurs ARM).
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -81,4 +85,7 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+
+    // Lecture des mots sur la photo de la liste, sur le téléphone, sans Internet.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }
