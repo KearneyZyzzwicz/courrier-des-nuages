@@ -33,6 +33,9 @@ class SeanceCalcul(
 ) {
     val resultats = mutableStateListOf<ResultatMot>().apply { addAll(resultatsDeja) }
 
+    /** Vrai une fois la séance qui compte terminée (enregistrée, mots à revoir, compteurs). */
+    private var termine = false
+
     var rattrapage by mutableStateOf<List<String>>(emptyList())
         private set
     var enRattrapage by mutableStateOf(false)
@@ -157,6 +160,15 @@ class SeanceCalcul(
         val cle = calcul.canonique.texte
         resultats += ResultatMot(mot = texte, points = points, revision = cle in calculsRevision)
         if (compte) enregistrer(this)
+        // Le dernier résultat est noté : la séance qui compte est finie tout de suite, même si
+        // l'enfant quitte pendant la recopie ou le tampon du dernier mot.
+        if (compte && resultats.size >= ordre.size) terminerUneFois()
+    }
+
+    private fun terminerUneFois() {
+        if (termine) return
+        termine = true
+        terminer(this)
     }
 
     private fun suivant() {
@@ -175,7 +187,7 @@ class SeanceCalcul(
     }
 
     private fun finirPartiePrincipale() {
-        if (compte) terminer(this)
+        if (compte) terminerUneFois()
         rattrapage = resultats.filter { it.points < 1.0 }.map { it.mot }
         index = 0
         if (rattrapage.isEmpty()) {

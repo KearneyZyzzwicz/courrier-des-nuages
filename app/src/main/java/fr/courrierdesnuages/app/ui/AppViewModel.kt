@@ -781,6 +781,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val jour = Jours.aujourdhui()
         val existante = d.seance(jour, Matiere.ITALIEN)
         val maintenant = System.currentTimeMillis()
+        // Les vignettes sont tirées parmi les mots italiens de la semaine.
+        val motsDeLaSemaine = semaine(Semaines.lundi(LocalDate.now()).toString())
+            ?.mots.orEmpty().filter { it.complet }.map { it.italien }
         val seance = if (existante != null && !existante.terminee) {
             SeanceItalien(
                 profil = profil,
@@ -792,6 +795,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 debutLe = existante.debutLe,
                 enregistrer = ::enregistrerProgressionItalien,
                 terminer = ::terminerItalien,
+                motsDeLaSemaine = motsDeLaSemaine,
             )
         } else {
             val mots = if (existante != null) existante.ordre else motsDuSoirItalien(profil).map { it.code }
@@ -807,6 +811,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 debutLe = maintenant,
                 enregistrer = if (existante == null) ::enregistrerProgressionItalien else { _ -> },
                 terminer = if (existante == null) ::terminerItalien else { _ -> },
+                motsDeLaSemaine = motsDeLaSemaine,
             ).also { if (existante == null) enregistrerProgressionItalien(it) }
         }
         seanceItalien = seance

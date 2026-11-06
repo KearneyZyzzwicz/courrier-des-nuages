@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -62,16 +60,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.courrierdesnuages.app.R
-import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.ClavierAzerty
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
-import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
 import fr.courrierdesnuages.app.ui.composants.Carte
 import fr.courrierdesnuages.app.ui.composants.TamponBravo
 import fr.courrierdesnuages.app.ui.theme.Andika
-import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
 import fr.courrierdesnuages.app.ui.theme.Jaune
@@ -186,7 +181,7 @@ private fun DeroulementItalien(seance: SeanceItalien, sons: Sons) {
 
         val message = seance.message ?: when (etape) {
             EtapeItalien.PIGEON -> "Touche le tube pour dérouler le message."
-            EtapeItalien.SAISIE -> "Écris ce mot en italien, puis appuie sur Valider."
+            EtapeItalien.CHOIX -> "Touche le mot italien qui veut dire la même chose."
             else -> ""
         }
         Text(
@@ -199,21 +194,85 @@ private fun DeroulementItalien(seance: SeanceItalien, sons: Sons) {
                 .padding(horizontal = 16.dp, vertical = 6.dp),
         )
 
-        if (etape == EtapeItalien.SECONDE_CHANCE) {
-            CasesItalien(seance)
-            Spacer(Modifier.weight(1f))
-            TuilesItalien(seance)
-        } else {
-            ArdoiseItalien(seance.saisie, juste = etape == EtapeItalien.BRAVO, actif = etape == EtapeItalien.SAISIE || etape == EtapeItalien.RECOPIE)
-            Spacer(Modifier.weight(1f))
-            ClavierAzerty(
-                onTexte = { seance.taper(it) },
-                onEffacer = { seance.effacer() },
-                onValider = { seance.valider() },
-                actif = etape == EtapeItalien.SAISIE || etape == EtapeItalien.RECOPIE,
-                accents = ACCENTS_ITALIENS,
-                accentsPlus = emptyList(),
-            )
+        when (etape) {
+            EtapeItalien.CHOIX, EtapeItalien.CORRECTION, EtapeItalien.BRAVO -> {
+                Vignettes(seance)
+                Spacer(Modifier.weight(1f))
+                if (etape == EtapeItalien.CORRECTION) {
+                    BoutonPrincipal(
+                        texte = "Je recopie le bon mot",
+                        onClick = { seance.allerALaRecopie() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                    )
+                }
+            }
+            EtapeItalien.RECOPIE -> {
+                ArdoiseItalien(seance.saisie, juste = false, actif = true)
+                Spacer(Modifier.weight(1f))
+                ClavierAzerty(
+                    onTexte = { seance.taper(it) },
+                    onEffacer = { seance.effacer() },
+                    onValider = { seance.valider() },
+                    actif = true,
+                    accents = ACCENTS_ITALIENS,
+                    accentsPlus = emptyList(),
+                )
+            }
+            else -> Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+/**
+ * Les 4 vignettes : la bonne traduction et 3 autres mots de la semaine. Après le choix, la bonne
+ * s'allume en vert, et celle touchée par erreur en rouge.
+ */
+@Composable
+private fun Vignettes(seance: SeanceItalien) {
+    val choix = seance.etape == EtapeItalien.CHOIX
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        for (rangee in seance.vignettes.chunked(2)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (v in rangee) {
+                    val bonne = seance.estLaBonne(v)
+                    val touchee = v == seance.choisie
+                    val (fond, texte) = when {
+                        choix -> Color.White to Encre
+                        bonne -> Vert to Color.White
+                        touchee -> RougeFonce to Color.White
+                        else -> Color.White.copy(alpha = 0.55f) to EncreDouce
+                    }
+                    Surface(
+                        onClick = { seance.choisir(v) },
+                        enabled = choix,
+                        shape = RoundedCornerShape(18.dp),
+                        color = fond,
+                        contentColor = texte,
+                        border = BorderStroke(2.dp, if (choix) Jaune else fond),
+                        shadowElevation = if (choix) 3.dp else 0.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(92.dp),
+                    ) {
+                        Box(Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                v,
+                                style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = texte),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                }
+                if (rangee.size == 1) Spacer(Modifier.weight(1f))
+            }
         }
     }
 }
@@ -354,93 +413,6 @@ private fun ArdoiseItalien(texte: String, juste: Boolean, actif: Boolean) {
                 }
             }
         }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun CasesItalien(seance: SeanceItalien) {
-    val modele = Mots.normaliser(seance.mot.italien)
-    val lettres = seance.posees.map { seance.tirage[it] }
-    FlowRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        var i = 0
-        for (c in modele) {
-            if (c == ' ') {
-                Spacer(Modifier.width(16.dp))
-            } else {
-                val lettre = lettres.getOrNull(i)
-                i++
-                Box(
-                    Modifier
-                        .size(width = 34.dp, height = 46.dp)
-                        .background(Color.White, RoundedCornerShape(8.dp))
-                        .border(2.dp, if (lettre != null) Encre else Encre.copy(alpha = 0.25f), RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (lettre != null) {
-                        Text(lettre.toString(), style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Encre))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun TuilesItalien(seance: SeanceItalien) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            seance.tirage.forEachIndexed { position, lettre ->
-                val utilisee = position in seance.posees
-                Surface(
-                    onClick = { seance.poserTuile(position) },
-                    enabled = !utilisee,
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (utilisee) CielBas else Jaune,
-                    contentColor = Encre,
-                    shadowElevation = if (utilisee) 0.dp else 2.dp,
-                    modifier = Modifier.size(54.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            lettre.toString(),
-                            style = TextStyle(
-                                fontFamily = Andika,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 26.sp,
-                                color = if (utilisee) Encre.copy(alpha = 0.25f) else Encre,
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(18.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            BoutonSecondaire(texte = "Effacer", onClick = { seance.retirerTuile() })
-            BoutonPrincipal(
-                texte = "Valider",
-                onClick = { seance.validerTuiles() },
-                actif = seance.posees.size == seance.tirage.size,
-                couleur = Vert,
-            )
-        }
-        Spacer(Modifier.height(10.dp))
     }
 }
 
