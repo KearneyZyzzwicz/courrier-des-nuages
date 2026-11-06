@@ -7,7 +7,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import kotlin.random.Random
 
-/** Un mot de vocabulaire : le français affiché, l'italien à écrire. */
+/** Un mot de vocabulaire : le français affiché, l'italien à retrouver parmi les vignettes. */
 data class MotItalien(val francais: String, val italien: String) {
     /** Forme enregistrée dans les séances : « le chat|il gatto ». */
     val code: String get() = "${Mots.normaliser(francais)}|${Mots.normaliser(italien)}"

@@ -33,6 +33,9 @@ class SeanceDictee(
 ) {
     val resultats = mutableStateListOf<ResultatMot>().apply { addAll(resultatsDeja) }
 
+    /** Vrai une fois la séance qui compte terminée (enregistrée, mots à revoir, compteurs). */
+    private var termine = false
+
     /** Les mots repris en fin de séance, sans points. */
     var rattrapage by mutableStateOf<List<String>>(emptyList())
         private set
@@ -185,6 +188,15 @@ class SeanceDictee(
         if (enRattrapage || resultats.size > index) return
         resultats += ResultatMot(mot = mot, points = points, revision = motsRevision.any { Mots.identiques(it, mot) })
         if (compte) enregistrer(this)
+        // Le dernier résultat est noté : la séance qui compte est finie tout de suite, même si
+        // l'enfant quitte pendant la recopie ou le tampon du dernier mot.
+        if (compte && resultats.size >= ordre.size) terminerUneFois()
+    }
+
+    private fun terminerUneFois() {
+        if (termine) return
+        termine = true
+        terminer(this)
     }
 
     private fun suivant() {
@@ -204,7 +216,7 @@ class SeanceDictee(
     }
 
     private fun finirPartiePrincipale() {
-        if (compte) terminer(this)
+        if (compte) terminerUneFois()
         rattrapage = resultats.filter { it.points < 1.0 }.map { it.mot }
         index = 0
         if (rattrapage.isEmpty()) {

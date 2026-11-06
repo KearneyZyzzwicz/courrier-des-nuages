@@ -3,7 +3,11 @@ package fr.courrierdesnuages.app.son
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -60,7 +64,13 @@ class Sons(contexte: Context) {
     }
 }
 
-/** La voix d'Android, en français, un peu plus lente que d'habitude. */
+/**
+ * La voix d'Android, en français, un peu plus lente que d'habitude.
+ *
+ * Le moteur de synthèse charge sa voix au premier mot qu'on lui demande, et ce premier mot se perd
+ * parfois. La voix est donc réveillée dès sa création par un mot dit en silence, et chaque mot est
+ * redemandé une fois si la voix ne l'a pas commencé au bout de 2 secondes.
+ */
 class Voix(contexte: Context) : TextToSpeech.OnInitListener {
 
     var prete by mutableStateOf(false)
@@ -68,10 +78,28 @@ class Voix(contexte: Context) : TextToSpeech.OnInitListener {
     var probleme by mutableStateOf<String?>(null)
         private set
 
+    private val principal = Handler(Looper.getMainLooper())
     private val tts = TextToSpeech(contexte.applicationContext, this)
-    private var enAttente: String? = null
 
+    /** Le mot à dire, gardé tant que la voix ne l'a pas commencé. */
+    private var enAttente: String? = null
+    private var idEnCours: String? = null
+    private var numero = 0
+    private var relances = 0
+
+    private val verifier = Runnable {
+        if (enAttente != null && !tts.isSpeaking && relances < 1) {
+            relances += 1
+            parler()
+        }
+    }
+
+    // Appelé par Android, parfois avant la fin de la création de l'objet : on attend le fil principal.
     override fun onInit(statut: Int) {
+        principal.post { demarrer(statut) }
+    }
+
+    private fun demarrer(statut: Int) {
         if (statut != TextToSpeech.SUCCESS) {
             probleme = "La voix d'Android ne démarre pas sur ce téléphone."
             return
@@ -82,25 +110,58 @@ class Voix(contexte: Context) : TextToSpeech.OnInitListener {
             return
         }
         tts.setSpeechRate(0.8f)
+        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(id: String?) = commence(id)
+
+            override fun onDone(id: String?) = commence(id)
+
+            @Deprecated("Remplacée par onError(String, Int), qui l'appelle.")
+            override fun onError(id: String?) {
+                principal.post { if (id != null && id == idEnCours) verifier.run() }
+            }
+        })
+        // Réveil du moteur : un mot dit en silence lui fait charger sa voix avant le premier vrai mot.
+        val silence = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 0f) }
+        tts.speak("Bonjour", TextToSpeech.QUEUE_ADD, silence, "reveil")
         prete = true
-        enAttente?.let { dire(it) }
-        enAttente = null
+        if (enAttente != null) parler(TextToSpeech.QUEUE_ADD)
+    }
+
+    /** La voix a commencé (ou fini) ce mot : plus besoin de le redemander. */
+    private fun commence(id: String?) {
+        principal.post {
+            if (id != null && id == idEnCours) {
+                enAttente = null
+                principal.removeCallbacks(verifier)
+            }
+        }
+    }
+
+    private fun parler(mode: Int = TextToSpeech.QUEUE_FLUSH) {
+        val texte = enAttente ?: return
+        numero += 1
+        val id = "mot$numero"
+        idEnCours = id
+        tts.speak(texte, mode, null, id)
+        principal.removeCallbacks(verifier)
+        principal.postDelayed(verifier, 2000L)
     }
 
     fun dire(texte: String) {
-        if (!prete) {
-            enAttente = texte
-            return
-        }
-        tts.speak(texte, TextToSpeech.QUEUE_FLUSH, null, "mot")
+        enAttente = texte
+        relances = 0
+        if (prete) parler()
     }
 
     fun taire() {
         enAttente = null
+        idEnCours = null
+        principal.removeCallbacks(verifier)
         if (prete) tts.stop()
     }
 
     fun liberer() {
+        principal.removeCallbacks(verifier)
         tts.shutdown()
     }
 }
