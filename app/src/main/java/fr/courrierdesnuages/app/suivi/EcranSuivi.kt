@@ -184,13 +184,12 @@ private fun EtatsDuJour(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
             onDismissRequest = { aConfirmer = null },
             title = { Text("Remettre à zéro la séance de $nom ?") },
             text = {
-                Text(
-                    "La séance de ${profil.prenom} est effacée, avec ses réponses, ses points, " +
-                        (if (s.matiere == Matiere.ITALIEN) "" else "sa médaille, ") +
-                        "et les mots à revoir qu'elle avait changés" +
-                        (if (s.matiere == Matiere.ITALIEN) ", ainsi que la carte postale qu'elle aurait rapportée" else "") +
-                        ". ${profil.prenom} pourra la recommencer, et elle comptera de nouveau.",
-                )
+                val efface = if (s.matiere == Matiere.ITALIEN) {
+                    "ses réponses, ses points, les mots à revoir qu'elle avait changés et la carte postale qu'elle aurait rapportée"
+                } else {
+                    "ses réponses, ses points, sa médaille et les mots à revoir qu'elle avait changés"
+                }
+                Text("La séance de ${profil.prenom} est effacée, avec $efface. ${profil.prenom} pourra la recommencer, et elle comptera de nouveau.")
             },
             confirmButton = {
                 TextButton(onClick = {
