@@ -16,6 +16,7 @@ import fr.courrierdesnuages.app.italien.CartePostale
 import fr.courrierdesnuages.app.italien.MotItalien
 import fr.courrierdesnuages.app.italien.SemaineItalien
 import fr.courrierdesnuages.app.suivi.Ajout
+import fr.courrierdesnuages.app.suivi.RemiseAZero
 import fr.courrierdesnuages.app.suivi.parMatiere
 import kotlinx.coroutines.tasks.await
 
@@ -224,6 +225,21 @@ class Depot {
             resultats = resultats,
             debutLe = doc.getLong("debutLe") ?: 0L,
             finLe = doc.getLong("finLe") ?: 0L,
+            revisionsAvant = (doc.get("revisionsAvant") as? List<*>)?.mapNotNull { element ->
+                val m = element as? Map<*, *> ?: return@mapNotNull null
+                val cle = m["cle"] as? String ?: return@mapNotNull null
+                val avant = if (m["existait"] == true) {
+                    Revision(
+                        id = cle,
+                        mot = m["mot"] as? String ?: "",
+                        reussitesDeSuite = (m["reussitesDeSuite"] as? Number)?.toInt() ?: 0,
+                        dernierJour = m["dernierJour"] as? String ?: "",
+                    )
+                } else {
+                    null
+                }
+                RevisionAvant(cle, avant)
+            },
         )
     }
 
@@ -257,10 +273,21 @@ class Depot {
         collection: String,
         revisionsAEcrire: List<Revision>,
         revisionsASupprimer: List<String>,
+        revisionsAvant: List<RevisionAvant>,
     ) {
         val lot = db.batch()
         val ref = profilRef(idProfil)
-        lot.set(ref.collection("seances").document(seance.id), champsSeance(seance))
+        // La séance garde l'état d'avant des mots à revoir, pour pouvoir être remise à zéro.
+        val trace = revisionsAvant.map { r ->
+            mapOf(
+                "cle" to r.cle,
+                "existait" to (r.avant != null),
+                "mot" to (r.avant?.mot ?: ""),
+                "reussitesDeSuite" to (r.avant?.reussitesDeSuite ?: 0),
+                "dernierJour" to (r.avant?.dernierJour ?: ""),
+            )
+        }
+        lot.set(ref.collection("seances").document(seance.id), champsSeance(seance) + ("revisionsAvant" to trace))
         for (r in revisionsAEcrire) {
             lot.set(
                 ref.collection(collection).document(r.id),
@@ -268,6 +295,40 @@ class Depot {
             )
         }
         for (id in revisionsASupprimer) lot.delete(ref.collection(collection).document(id))
+        lot.commit()
+    }
+
+    /**
+     * Remise à zéro d'une séance par le parent, tout ensemble : la séance est effacée, les mots à
+     * revoir reprennent leur état d'avant, ce qu'elle avait ajouté aux compteurs de l'année est
+     * retiré, et la carte postale qu'elle avait rapportée quitte l'album.
+     */
+    fun remettreAZero(idProfil: String, an: String, collection: String, plan: RemiseAZero.Plan) {
+        val lot = db.batch()
+        val ref = profilRef(idProfil)
+        lot.delete(ref.collection("seances").document(plan.idSeance))
+        for (r in plan.aRestaurer) {
+            lot.set(
+                ref.collection(collection).document(r.id),
+                mapOf("mot" to r.mot, "reussitesDeSuite" to r.reussitesDeSuite, "dernierJour" to r.dernierJour),
+            )
+        }
+        for (id in plan.aSupprimer) lot.delete(ref.collection(collection).document(id))
+        val retrait = plan.retrait
+        if (retrait != null) {
+            val m = retrait.matiere
+            val champs = HashMap<String, Any>()
+            champs["annees.$an.$m.points"] = FieldValue.increment(-retrait.points)
+            champs["annees.$an.$m.possibles"] = FieldValue.increment(-retrait.possibles)
+            if (retrait.livraisons > 0) champs["annees.$an.livraisons"] = FieldValue.increment(-retrait.livraisons)
+            when (retrait.medaille) {
+                Medaille.OR -> champs["annees.$an.$m.or"] = FieldValue.increment(-1L)
+                Medaille.ARGENT -> champs["annees.$an.$m.argent"] = FieldValue.increment(-1L)
+                Medaille.AUCUNE -> Unit
+            }
+            lot.update(ref, champs)
+        }
+        plan.idCarte?.let { lot.delete(ref.collection("cartes").document(it)) }
         lot.commit()
     }
 
@@ -425,8 +486,8 @@ class Depot {
                 val x = m[matiere] as? Map<*, *> ?: continue
                 val avant = r[matiere] ?: MedaillesGagnees()
                 r[matiere] = MedaillesGagnees(
-                    or = avant.or + ((x["or"] as? Number)?.toLong() ?: 0L),
-                    argent = avant.argent + ((x["argent"] as? Number)?.toLong() ?: 0L),
+                    or = avant.or + ((x["or"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
+                    argent = avant.argent + ((x["argent"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
                 )
             }
         }
@@ -438,17 +499,18 @@ class Depot {
         fun matiere(cle: String): StatsMatiere {
             val x = m[cle] as? Map<*, *> ?: return StatsMatiere()
             return StatsMatiere(
-                points = (x["points"] as? Number)?.toDouble() ?: 0.0,
-                possibles = (x["possibles"] as? Number)?.toDouble() ?: 0.0,
-                or = (x["or"] as? Number)?.toLong() ?: 0L,
-                argent = (x["argent"] as? Number)?.toLong() ?: 0L,
+                // Jamais en dessous de zéro, même après une remise à zéro mal tombée.
+                points = ((x["points"] as? Number)?.toDouble() ?: 0.0).coerceAtLeast(0.0),
+                possibles = ((x["possibles"] as? Number)?.toDouble() ?: 0.0).coerceAtLeast(0.0),
+                or = ((x["or"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
+                argent = ((x["argent"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
             )
         }
         return StatsAnnee(
             francais = matiere(Matiere.FRANCAIS),
             maths = matiere(Matiere.MATHS),
             italien = matiere(Matiere.ITALIEN),
-            livraisons = (m["livraisons"] as? Number)?.toLong() ?: 0L,
+            livraisons = ((m["livraisons"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
             calcule = m["calcule"] as? Boolean ?: false,
         )
     }

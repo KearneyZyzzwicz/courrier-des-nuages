@@ -1,5 +1,6 @@
 package fr.courrierdesnuages.app.suivi
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,13 +15,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -131,23 +138,31 @@ private fun EtatsDuJour(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
         soir.date == aujourdhui -> null
         else -> "liste du ${Jours.enClair(soir.date)}"
     }
+    // Les séances du jour : celles du dernier soir envoyé (français, maths) et l'italien d'aujourd'hui.
+    val francais = soir?.let { d.seance(it.date, Matiere.FRANCAIS) }
+    val maths = soir?.let { d.seance(it.date, Matiere.MATHS) }
+    val italien = d.seance(aujourdhui, Matiere.ITALIEN)
+    var aConfirmer by remember { mutableStateOf<Seance?>(null) }
+    var fait by remember { mutableStateOf<String?>(null) }
+
     LigneEtat(
         "Français",
         when {
             soir == null -> EtatDuJour("Aucune liste envoyée", EncreDouce)
             soir.mots.isEmpty() -> EtatDuJour("Pas de mots ce soir", EncreDouce)
-            else -> etatSeance(d.seance(soir.date, Matiere.FRANCAIS), "mot", duSoir)
+            else -> etatSeance(francais, "mot", duSoir)
         },
+        onRemettreAZero = francais?.let { s -> { aConfirmer = s } },
     )
     LigneEtat(
         "Maths",
         when {
             soir == null -> EtatDuJour("Aucune liste envoyée", EncreDouce)
             soir.tables.isEmpty() -> EtatDuJour("Pas de tables ce soir", EncreDouce)
-            else -> etatSeance(d.seance(soir.date, Matiere.MATHS), "calcul", duSoir)
+            else -> etatSeance(maths, "calcul", duSoir)
         },
+        onRemettreAZero = maths?.let { s -> { aConfirmer = s } },
     )
-    val italien = d.seance(aujourdhui, Matiere.ITALIEN)
     LigneEtat(
         "Italien",
         when {
@@ -155,7 +170,47 @@ private fun EtatsDuJour(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
             vm.motsDuSoirItalien(profil).isEmpty() -> EtatDuJour("Pas de mot aujourd'hui", EncreDouce)
             else -> EtatDuJour("Pas encore faite", RougeFonce)
         },
+        onRemettreAZero = italien?.let { s -> { aConfirmer = s } },
     )
+    fait?.let {
+        Spacer(Modifier.height(6.dp))
+        Text(it, style = MaterialTheme.typography.bodyMedium, color = Vert)
+    }
+
+    val s = aConfirmer
+    if (s != null) {
+        val nom = nomDeMatiere(s.matiere)
+        AlertDialog(
+            onDismissRequest = { aConfirmer = null },
+            title = { Text("Remettre à zéro la séance de $nom ?") },
+            text = {
+                val efface = if (s.matiere == Matiere.ITALIEN) {
+                    "ses réponses, ses points, les mots à revoir qu'elle avait changés et la carte postale qu'elle aurait rapportée"
+                } else {
+                    "ses réponses, ses points, sa médaille et les mots à revoir qu'elle avait changés"
+                }
+                Text("La séance de ${profil.prenom} est effacée, avec $efface. ${profil.prenom} pourra la recommencer, et elle comptera de nouveau.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.remettreAZero(profil, s)
+                    fait = "La séance de $nom est remise à zéro : ${profil.prenom} peut la recommencer."
+                    aConfirmer = null
+                }) {
+                    Text("Remettre à zéro", color = RougeFonce)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { aConfirmer = null }) { Text("Annuler") }
+            },
+        )
+    }
+}
+
+private fun nomDeMatiere(matiere: String): String = when (matiere) {
+    Matiere.MATHS -> "maths"
+    Matiere.ITALIEN -> "italien"
+    else -> "français"
 }
 
 private data class EtatDuJour(val texte: String, val couleur: Color, val medaille: Medaille = Medaille.AUCUNE)
@@ -174,10 +229,23 @@ private fun etatSeance(s: Seance?, unite: String, duSoir: String?): EtatDuJour {
 }
 
 @Composable
-private fun LigneEtat(matiere: String, etat: EtatDuJour) {
+private fun LigneEtat(matiere: String, etat: EtatDuJour, onRemettreAZero: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(matiere, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(84.dp))
-        Text(etat.texte, style = MaterialTheme.typography.bodyMedium, color = etat.couleur, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(etat.texte, style = MaterialTheme.typography.bodyMedium, color = etat.couleur)
+            if (onRemettreAZero != null) {
+                Text(
+                    "Remettre à zéro",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = RougeFonce,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onRemettreAZero)
+                        .padding(vertical = 6.dp),
+                )
+            }
+        }
         if (etat.medaille != Medaille.AUCUNE) DessinMedaille(etat.medaille, Modifier.size(28.dp))
     }
 }

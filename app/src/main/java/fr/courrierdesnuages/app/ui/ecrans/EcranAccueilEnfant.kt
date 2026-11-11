@@ -40,6 +40,7 @@ import fr.courrierdesnuages.app.ui.composants.AvatarAnime
 import fr.courrierdesnuages.app.italien.Semaines
 import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
 import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
+import fr.courrierdesnuages.app.ui.composants.Carte
 import java.time.LocalDate
 import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
@@ -80,6 +81,17 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(20.dp))
+
+        // Après une remise à zéro faite par le parent.
+        val messageEnfant = vm.messageEnfant
+        if (messageEnfant != null && messageEnfant.first == profil.id) {
+            Carte(Modifier.fillMaxWidth()) {
+                Text(messageEnfant.second, style = MaterialTheme.typography.titleMedium, color = Encre)
+                Spacer(Modifier.height(8.dp))
+                BoutonSecondaire(texte = "D'accord", onClick = { vm.oublierMessageEnfant() })
+            }
+            Spacer(Modifier.height(16.dp))
+        }
 
         // Français : la dictée du dernier soir envoyé.
         val soir = donnees.dernierSoir

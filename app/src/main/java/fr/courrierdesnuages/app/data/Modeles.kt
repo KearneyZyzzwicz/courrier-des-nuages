@@ -105,6 +105,11 @@ data class Seance(
     val resultats: List<ResultatMot>,
     val debutLe: Long,
     val finLe: Long,
+    /**
+     * L'état d'avant des mots à revoir que la séance a changés en se terminant, pour pouvoir la
+     * remettre à zéro. Null pour une séance finie avant que cette trace soit gardée.
+     */
+    val revisionsAvant: List<RevisionAvant>? = null,
 ) {
     val id: String get() = idSeance(soir, matiere)
     val terminee: Boolean get() = etat == EtatSeance.TERMINEE
@@ -134,6 +139,9 @@ enum class Medaille(val cle: String) {
 
 /** Un mot raté qui revient jusqu'à être réussi du premier coup deux jours de suite. */
 data class Revision(val id: String, val mot: String, val reussitesDeSuite: Int, val dernierJour: String)
+
+/** Un mot à revoir tel qu'il était avant une séance ([avant] null : il n'existait pas). */
+data class RevisionAvant(val cle: String, val avant: Revision?)
 
 /** Écrit un nombre de points à la française : 8 ou 8,5. */
 fun pointsEnTexte(points: Double): String =

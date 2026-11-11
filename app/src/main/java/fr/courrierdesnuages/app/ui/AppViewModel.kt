@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.FirebaseNetworkException
@@ -48,7 +49,9 @@ import fr.courrierdesnuages.app.maj.NouvelleVersion
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.son.Voix
 import fr.courrierdesnuages.app.suivi.Classement
+import fr.courrierdesnuages.app.suivi.RemiseAZero
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
@@ -124,6 +127,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     // Dictée en cours
+    /** Un message pour l'enfant sur son accueil (après une remise à zéro faite par le parent). */
+    var messageEnfant by mutableStateOf<Pair<String, String>?>(null)
+        private set
+
+    fun oublierMessageEnfant() {
+        messageEnfant = null
+    }
+
+    private var surveillance: Job? = null
+
     var seanceDictee by mutableStateOf<SeanceDictee?>(null)
         private set
 
@@ -566,6 +579,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         voix
         sons
         seanceDictee = seance
+        messageEnfant = null
+        surveiller(profil, seance.compte, Seance.idSeance(seance.soir, Matiere.FRANCAIS), Matiere.FRANCAIS)
         ecran = Ecran.Dictee(profil.id)
     }
 
@@ -590,7 +605,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (reussites >= 2) aSupprimer += cle else aEcrire += existante.copy(reussitesDeSuite = reussites, dernierJour = s.soir)
             }
         }
-        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_FRANCAIS, aEcrire, aSupprimer)
+        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_FRANCAIS, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
         compter(s.profil, s.versSeance())
     }
 
@@ -641,6 +656,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun fermerDictee(suite: Ecran) {
         val s = seanceDictee ?: return
+        arreterSurveillance()
         s.quitteLAppli()
         _voix?.taire()
         _sons?.arreterMoteur()
@@ -705,6 +721,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         sons
         seanceCalcul = seance
+        messageEnfant = null
+        surveiller(profil, seance.compte, Seance.idSeance(seance.soir, Matiere.MATHS), Matiere.MATHS)
         ecran = Ecran.TriDesColis(profil.id)
     }
 
@@ -731,7 +749,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (reussites >= 2) aSupprimer += cle else aEcrire += existante.copy(reussitesDeSuite = reussites, dernierJour = s.soir)
             }
         }
-        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_MATHS, aEcrire, aSupprimer)
+        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_MATHS, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
         compter(s.profil, s.versSeance())
     }
 
@@ -743,6 +761,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun fermerCalcul(suite: Ecran) {
         val s = seanceCalcul ?: return
+        arreterSurveillance()
         s.quitteLAppli()
         _sons?.arreterMoteur()
         seanceCalcul = null
@@ -816,6 +835,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         seanceItalien = seance
         sons
+        messageEnfant = null
+        surveiller(profil, seance.compte, Seance.idSeance(seance.soir, Matiere.ITALIEN), Matiere.ITALIEN)
         ecran = Ecran.Pigeon(profil.id)
     }
 
@@ -837,7 +858,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 aSupprimer += cle // enfin su du premier coup : il ne revient plus
             }
         }
-        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_ITALIEN, aEcrire, aSupprimer)
+        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_ITALIEN, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
         compter(s.profil, s.versSeance())
 
         // Les 5 mots de la semaine sus du premier coup : le pigeon apporte une carte postale,
@@ -862,9 +883,73 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun fermerItalien(suite: Ecran) {
         val s = seanceItalien ?: return
+        arreterSurveillance()
         s.quitteLAppli()
         seanceItalien = null
         ecran = suite
+    }
+
+    // ---------- Remise à zéro (toujours décidée par le parent) ----------
+
+    /**
+     * Le parent remet à zéro la séance du jour d'un enfant (après un souci de téléphone, par
+     * exemple) : elle est effacée avec ses points, sa médaille, ses mots à revoir et la carte
+     * postale qu'elle avait rapportée. L'enfant la recommence, et elle compte de nouveau.
+     */
+    fun remettreAZero(profil: Profil, seance: Seance) {
+        val d = donnees(profil.id)
+        val plan = RemiseAZero.preparer(seance, d.cartesGagnees)
+        val collection = when (seance.matiere) {
+            Matiere.MATHS -> REVISIONS_MATHS
+            Matiere.ITALIEN -> REVISIONS_ITALIEN
+            else -> REVISIONS_FRANCAIS
+        }
+        val an = runCatching { Jours.anneeScolaire(LocalDate.parse(seance.soir)) }.getOrDefault(Jours.anneeScolaire())
+        depot.remettreAZero(profil.id, an, collection, plan)
+    }
+
+    /**
+     * Pendant une séance qui compte : si le parent la remet à zéro depuis un autre téléphone, elle
+     * s'arrête aussi ici, sans rien réécrire, et l'enfant peut la recommencer.
+     */
+    private fun surveiller(profil: Profil, compte: Boolean, idSeance: String, matiere: String) {
+        arreterSurveillance()
+        if (!compte) return
+        val d = donnees(profil.id)
+        surveillance = viewModelScope.launch {
+            var vue = false
+            snapshotFlow { d.seancesChargees to d.seances.any { it.id == idSeance } }.collect { (chargees, presente) ->
+                if (presente) {
+                    vue = true
+                } else if (vue && chargees) {
+                    seanceRemiseAZero(profil, matiere)
+                }
+            }
+        }
+    }
+
+    private fun arreterSurveillance() {
+        surveillance?.cancel()
+        surveillance = null
+    }
+
+    private fun seanceRemiseAZero(profil: Profil, matiere: String) {
+        arreterSurveillance()
+        _voix?.taire()
+        _sons?.arreterMoteur()
+        when (matiere) {
+            Matiere.FRANCAIS -> seanceDictee = null
+            Matiere.MATHS -> seanceCalcul = null
+            else -> seanceItalien = null
+        }
+        val e = ecran
+        if (e is Ecran.Dictee || e is Ecran.TriDesColis || e is Ecran.Pigeon) ecran = Ecran.AccueilEnfant(profil.id)
+        val nom = when (matiere) {
+            Matiere.MATHS -> "maths"
+            Matiere.ITALIEN -> "italien"
+            else -> "français"
+        }
+        messageEnfant = profil.id to "Ta séance de $nom a été remise à zéro : tu peux la recommencer."
     }
 
     // ---------- Cartes postales et album ----------
@@ -897,6 +982,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun ouvrirCarteGagnee() {
         val s = seanceItalien ?: return
         val carte = s.carteGagnee ?: return
+        arreterSurveillance()
         seanceItalien = null
         ecran = Ecran.CartePostaleVue(s.profil.id, carte.id, nouvelle = true)
     }
