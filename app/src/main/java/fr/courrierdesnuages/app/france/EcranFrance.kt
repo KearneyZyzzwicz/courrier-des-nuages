@@ -124,8 +124,10 @@ private fun DrawScope.dessinerForme(forme: Forme, chemin: Path, couleur: Color, 
     val dx = (size.width - forme.largeur * k) / 2 - forme.gauche * k
     val dy = (size.height - forme.hauteur * k) / 2 - forme.haut * k
     if (ombre) {
+        val ombreX = dx + 1.5.dp.toPx()
+        val ombreY = dy + 2.5.dp.toPx()
         withTransform({
-            translate(dx + 1.5.dp.toPx(), dy + 2.5.dp.toPx())
+            translate(ombreX, ombreY)
             scale(k, k, pivot = Offset.Zero)
         }) { drawPath(chemin, Color.Black.copy(alpha = 0.13f)) }
     }
