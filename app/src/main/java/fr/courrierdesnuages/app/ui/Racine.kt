@@ -14,6 +14,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.courrierdesnuages.app.calcul.EcranTriDesColis
 import fr.courrierdesnuages.app.dictee.EcranDictee
+import fr.courrierdesnuages.app.france.EcranAlbumFrance
+import fr.courrierdesnuages.app.france.EcranCarteDepartement
+import fr.courrierdesnuages.app.france.EcranEpinglerDepartement
+import fr.courrierdesnuages.app.france.departement
 import fr.courrierdesnuages.app.italien.EcranAlbum
 import fr.courrierdesnuages.app.italien.EcranCartePostale
 import fr.courrierdesnuages.app.italien.EcranEpingler
@@ -85,7 +89,15 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         }
         is Ecran.Dictee -> {
             val s = vm.seanceDictee
-            if (s != null) EcranDictee(seance = s, sons = vm.sons, voix = vm.voix, onQuitter = { vm.quitterDictee() })
+            if (s != null) {
+                EcranDictee(
+                    seance = s,
+                    sons = vm.sons,
+                    voix = vm.voix,
+                    onQuitter = { vm.quitterDictee() },
+                    onOuvrirCarte = { vm.ouvrirCarteDeLaDictee() },
+                )
+            }
         }
         is Ecran.TriDesColis -> {
             val s = vm.seanceCalcul
@@ -115,6 +127,20 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         is Ecran.Album -> {
             val p = vm.profil(e.idProfil)
             if (p != null) EcranAlbum(vm, p)
+        }
+        is Ecran.CarteDepartement -> {
+            val p = vm.profil(e.idProfil)
+            val d = departement(e.code)
+            if (p != null && d != null) EcranCarteDepartement(vm, p, d, e.nouvelle)
+        }
+        is Ecran.EpinglerDepartement -> {
+            val p = vm.profil(e.idProfil)
+            val d = departement(e.code)
+            if (p != null && d != null) EcranEpinglerDepartement(vm, p, d)
+        }
+        is Ecran.AlbumFrance -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranAlbumFrance(vm, p)
         }
         is Ecran.MotsLangue -> EcranMotsLangue(vm, e.langue)
         Ecran.NouvelleCarte -> EcranNouvelleCarte(vm)

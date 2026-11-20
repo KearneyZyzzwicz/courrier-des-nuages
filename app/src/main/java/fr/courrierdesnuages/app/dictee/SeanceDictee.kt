@@ -66,6 +66,9 @@ class SeanceDictee(
     var dernierPoint by mutableStateOf(0.0)
         private set
 
+    /** Le département dont le Petit Avion rapporte la carte (dictée qui compte, tous les points). */
+    var carteGagnee by mutableStateOf<String?>(null)
+
     /** Numéro du passage de l'avion : change à chaque nouveau mot, même identique. */
     var passage by mutableStateOf(0)
         private set

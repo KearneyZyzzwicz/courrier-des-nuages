@@ -31,6 +31,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import fr.courrierdesnuages.app.france.DEPARTEMENTS
+import fr.courrierdesnuages.app.france.departement
+import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.data.DonneesEnfant
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
@@ -75,7 +78,24 @@ fun EcranSuivi(vm: AppViewModel, profil: Profil) {
             item { CarteAujourdhui(vm, profil, d) }
             item { CarteAnnee(vm, profil) }
             item { CartePlusRates(seances, complet = annee != null) }
-            item { CarteCartesPostales(vm, d) }
+            item {
+                CarteAlbum(
+                    titre = "Album de France",
+                    sur = DEPARTEMENTS.size,
+                    vide = "Une dictée avec tous les points rapporte la carte d'un département.",
+                    cartes = d.cartesFrance,
+                    nom = { code -> departement(code)?.let { "${it.code} · ${it.nom} (${it.ville})" } },
+                )
+            }
+            item {
+                CarteAlbum(
+                    titre = "Album d'Italie",
+                    sur = vm.toutesLesCartes.size,
+                    vide = "Une semaine d'italien sans faute rapporte une carte.",
+                    cartes = d.cartesGagnees,
+                    nom = { id -> vm.carte(id)?.ville },
+                )
+            }
             item {
                 Text("Jour par jour", style = MaterialTheme.typography.titleLarge, color = Encre)
                 if (annee == null) {
@@ -330,30 +350,19 @@ private fun CartePlusRates(seances: List<Seance>, complet: Boolean) {
 }
 
 @Composable
-private fun CarteCartesPostales(vm: AppViewModel, d: DonneesEnfant) {
+private fun CarteAlbum(titre: String, sur: Int, vide: String, cartes: List<CarteGagnee>, nom: (String) -> String?) {
     Carte(Modifier.fillMaxWidth()) {
-        val cartes = d.cartesGagnees.sortedByDescending { it.gagneeLe }
-        Text(
-            when (cartes.size) {
-                0 -> "Cartes postales"
-                1 -> "1 carte postale gagnée"
-                else -> "${cartes.size} cartes postales gagnées"
-            },
-            style = MaterialTheme.typography.titleLarge,
-        )
+        var tout by remember { mutableStateOf(false) }
+        val triees = cartes.sortedByDescending { it.gagneeLe }
+        Text("$titre : ${cartes.size} sur $sur", style = MaterialTheme.typography.titleLarge)
         if (cartes.isEmpty()) {
-            Text(
-                "Une semaine d'italien sans faute rapporte une carte.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = EncreDouce,
-            )
+            Text(vide, style = MaterialTheme.typography.bodyMedium, color = EncreDouce)
         }
-        for (c in cartes) {
-            val carte = vm.carte(c.idCarte)
+        for (c in if (tout) triees else triees.take(5)) {
             val jour = Instant.ofEpochMilli(c.gagneeLe).atZone(ZoneId.systemDefault()).toLocalDate().toString()
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(carte?.ville ?: "Carte retirée", style = MaterialTheme.typography.bodyMedium)
+                    Text(nom(c.idCarte) ?: "Carte retirée", style = MaterialTheme.typography.bodyMedium)
                     Text(
                         Jours.enClair(jour) + if (c.semaine == SEMAINE_OFFERTE) " · offerte" else "",
                         style = MaterialTheme.typography.bodySmall,
@@ -374,6 +383,9 @@ private fun CarteCartesPostales(vm: AppViewModel, d: DonneesEnfant) {
                     },
                 )
             }
+        }
+        if (!tout && triees.size > 5) {
+            TextButton(onClick = { tout = true }) { Text("Voir les ${triees.size} cartes") }
         }
     }
 }

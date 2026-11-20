@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import fr.courrierdesnuages.app.france.DEPARTEMENTS
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Medaille
@@ -167,16 +168,31 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
         // Les langues : le messager apporte les mots du jour ; les jours sans séance, les mots attendent.
         for (langue in Langue.entries) TuileLangue(vm, profil, donnees, langue)
 
-        // L'album des cartes postales, et la carte qui attend d'être épinglée.
+        // Les albums, et les cartes qui attendent d'être épinglées.
         val aEpingler = donnees.cartesGagnees.firstOrNull { !it.epinglee }
         if (aEpingler != null) {
             Spacer(Modifier.height(8.dp))
             BoutonPrincipal(
-                texte = "Une carte postale t'attend !",
+                texte = "Une carte d'Italie t'attend !",
                 onClick = { vm.ouvrirCarte(profil, aEpingler.idCarte, nouvelle = true) },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        val aPlacer = donnees.cartesFrance.firstOrNull { !it.epinglee }
+        if (aPlacer != null) {
+            Spacer(Modifier.height(8.dp))
+            BoutonPrincipal(
+                texte = "Une carte de France t'attend !",
+                onClick = { vm.ouvrirCarteDepartement(profil, aPlacer.idCarte, nouvelle = true) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        BoutonSecondaire(
+            texte = "Mon album de France (${donnees.cartesFrance.size} sur ${DEPARTEMENTS.size})",
+            onClick = { vm.ouvrirAlbumFrance(profil) },
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(8.dp))
         BoutonSecondaire(
             texte = "Mon album d'Italie (${donnees.cartesGagnees.size} carte${if (donnees.cartesGagnees.size > 1) "s" else ""})",

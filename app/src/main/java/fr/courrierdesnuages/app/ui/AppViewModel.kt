@@ -16,6 +16,7 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import fr.courrierdesnuages.app.BuildConfig
 import fr.courrierdesnuages.app.calcul.Calcul
+import fr.courrierdesnuages.app.cartes.Atlases
 import fr.courrierdesnuages.app.calcul.SeanceCalcul
 import fr.courrierdesnuages.app.data.Avatar
 import fr.courrierdesnuages.app.data.CodeParent
@@ -27,7 +28,9 @@ import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.data.CARTES_FRANCE
 import fr.courrierdesnuages.app.data.CARTES_ITALIE
+import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.REVISIONS_FRANCAIS
 import fr.courrierdesnuages.app.data.REVISIONS_MATHS
 import fr.courrierdesnuages.app.data.ResultatMot
@@ -35,6 +38,7 @@ import fr.courrierdesnuages.app.data.Revision
 import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.dictee.SeanceDictee
+import fr.courrierdesnuages.app.france.DEPARTEMENTS
 import fr.courrierdesnuages.app.italien.CARTES_INTEGREES
 import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.italien.CartePostale
@@ -53,6 +57,7 @@ import fr.courrierdesnuages.app.son.Voix
 import fr.courrierdesnuages.app.suivi.Classement
 import fr.courrierdesnuages.app.suivi.RemiseAZero
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
@@ -76,6 +81,9 @@ sealed interface Ecran {
     data class CartePostaleVue(val idProfil: String, val idCarte: String, val nouvelle: Boolean) : Ecran
     data class Epingler(val idProfil: String, val idCarte: String) : Ecran
     data class Album(val idProfil: String) : Ecran
+    data class CarteDepartement(val idProfil: String, val code: String, val nouvelle: Boolean) : Ecran
+    data class EpinglerDepartement(val idProfil: String, val code: String) : Ecran
+    data class AlbumFrance(val idProfil: String) : Ecran
     data class MotsLangue(val langue: Langue) : Ecran
     data object NouvelleCarte : Ecran
     data class VoirClassement(val idProfil: String) : Ecran
@@ -423,6 +431,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CartePostaleVue -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.Album(e.idProfil)
             is Ecran.Epingler -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Album -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.CarteDepartement -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.AlbumFrance(e.idProfil)
+            is Ecran.EpinglerDepartement -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.AlbumFrance -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.VoirClassement -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Tournee -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Suivi -> Ecran.EspaceParent
@@ -441,6 +452,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             // La voix et les bruitages mettent un moment à se préparer : on les lance tout de suite.
             voix
             sons
+            // La carte de France des albums se lit pendant ce temps.
+            viewModelScope.launch(Dispatchers.Default) { runCatching { Atlases.france(getApplication()) } }
             ecran = Ecran.AccueilEnfant(profil.id)
         }
         return bon
@@ -623,6 +636,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_FRANCAIS, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
         compter(s.profil, s.versSeance())
+
+        // Tous les points : le Petit Avion rapporte la carte d'un département que l'enfant n'a pas
+        // encore. Elle est liée à la séance, pour disparaître si le parent la remet à zéro.
+        if (s.medaille == Medaille.OR) {
+            val dep = RecompenseLangue.tirer(DEPARTEMENTS, { it.code }, donnees(s.profil.id).cartesFrance) ?: return
+            depot.enregistrerCarteGagnee(
+                s.profil.id,
+                CARTES_FRANCE,
+                CarteGagnee(dep.code, Seance.idSeance(s.soir, Matiere.FRANCAIS), System.currentTimeMillis(), epinglee = false, bienPlacee = false),
+            )
+            s.carteGagnee = dep.code
+        }
+    }
+
+    /** Après une dictée à 100 % : la carte de France rapportée par le Petit Avion. */
+    fun ouvrirCarteDeLaDictee() {
+        val s = seanceDictee ?: return
+        val code = s.carteGagnee ?: return
+        fermerDictee(Ecran.CarteDepartement(s.profil.id, code, nouvelle = true))
     }
 
     /** Ajoute une séance terminée aux compteurs de l'année (classement, médailles, tournée des îles). */
@@ -1064,6 +1096,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun ouvrirAlbum(profil: Profil) {
         donnees(profil.id)
         ecran = Ecran.Album(profil.id)
+    }
+
+    // ---------- L'album de France ----------
+
+    fun ouvrirCarteDepartement(profil: Profil, code: String, nouvelle: Boolean) {
+        ecran = Ecran.CarteDepartement(profil.id, code, nouvelle)
+    }
+
+    fun ouvrirEpingleDepartement(profil: Profil, code: String) {
+        ecran = Ecran.EpinglerDepartement(profil.id, code)
+    }
+
+    fun epinglerDepartement(profil: Profil, code: String, bienPlacee: Boolean) {
+        depot.marquerEpinglee(profil.id, CARTES_FRANCE, code, bienPlacee)
+    }
+
+    fun ouvrirAlbumFrance(profil: Profil) {
+        donnees(profil.id)
+        ecran = Ecran.AlbumFrance(profil.id)
     }
 
     fun ouvrirClassement(profil: Profil) {
