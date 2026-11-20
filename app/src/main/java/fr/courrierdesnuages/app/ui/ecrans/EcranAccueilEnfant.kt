@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import fr.courrierdesnuages.app.france.DEPARTEMENTS
+import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Medaille
@@ -187,6 +188,15 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        val monde = donnees.cartesMonde.firstOrNull { !it.epinglee }
+        if (monde != null) {
+            Spacer(Modifier.height(8.dp))
+            BoutonPrincipal(
+                texte = "Une carte du monde t'attend !",
+                onClick = { vm.ouvrirCarteMonde(profil, monde.idCarte, nouvelle = true) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Spacer(Modifier.height(8.dp))
         BoutonSecondaire(
             texte = "Mon album de France (${donnees.cartesFrance.size} sur ${DEPARTEMENTS.size})",
@@ -197,6 +207,12 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
         BoutonSecondaire(
             texte = "Mon album d'Italie (${donnees.cartesGagnees.size} carte${if (donnees.cartesGagnees.size > 1) "s" else ""})",
             onClick = { vm.ouvrirAlbum(profil) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        BoutonSecondaire(
+            texte = "Mon tour du monde (${donnees.cartesMonde.size} sur ${TOUR_DU_MONDE.size})",
+            onClick = { vm.ouvrirAlbumMonde(profil) },
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))

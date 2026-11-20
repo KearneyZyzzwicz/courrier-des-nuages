@@ -22,6 +22,10 @@ import fr.courrierdesnuages.app.italien.EcranAlbum
 import fr.courrierdesnuages.app.italien.EcranCartePostale
 import fr.courrierdesnuages.app.italien.EcranEpingler
 import fr.courrierdesnuages.app.langues.EcranLangue
+import fr.courrierdesnuages.app.monde.EcranAlbumMonde
+import fr.courrierdesnuages.app.monde.EcranCarteMonde
+import fr.courrierdesnuages.app.monde.EcranEpinglerMonde
+import fr.courrierdesnuages.app.monde.carteMonde
 import fr.courrierdesnuages.app.suivi.EcranClassement
 import fr.courrierdesnuages.app.suivi.EcranSuivi
 import fr.courrierdesnuages.app.suivi.EcranTournee
@@ -141,6 +145,20 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         is Ecran.AlbumFrance -> {
             val p = vm.profil(e.idProfil)
             if (p != null) EcranAlbumFrance(vm, p)
+        }
+        is Ecran.CarteMondeVue -> {
+            val p = vm.profil(e.idProfil)
+            val c = carteMonde(e.id)
+            if (p != null && c != null) EcranCarteMonde(vm, p, c, e.nouvelle)
+        }
+        is Ecran.EpinglerMonde -> {
+            val p = vm.profil(e.idProfil)
+            val c = carteMonde(e.id)
+            if (p != null && c != null) EcranEpinglerMonde(vm, p, c)
+        }
+        is Ecran.AlbumMonde -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranAlbumMonde(vm, p)
         }
         is Ecran.MotsLangue -> EcranMotsLangue(vm, e.langue)
         Ecran.NouvelleCarte -> EcranNouvelleCarte(vm)

@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import fr.courrierdesnuages.app.france.DEPARTEMENTS
 import fr.courrierdesnuages.app.france.departement
 import fr.courrierdesnuages.app.italien.CarteGagnee
+import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
+import fr.courrierdesnuages.app.monde.carteMonde
 import fr.courrierdesnuages.app.data.DonneesEnfant
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
@@ -85,6 +87,15 @@ fun EcranSuivi(vm: AppViewModel, profil: Profil) {
                     vide = "Une dictée avec tous les points rapporte la carte d'un département.",
                     cartes = d.cartesFrance,
                     nom = { code -> departement(code)?.let { "${it.code} · ${it.nom} (${it.ville})" } },
+                )
+            }
+            item {
+                CarteAlbum(
+                    titre = "Tour du monde",
+                    sur = TOUR_DU_MONDE.size,
+                    vide = "Une semaine d'anglais sans faute rapporte une carte.",
+                    cartes = d.cartesMonde,
+                    nom = { id -> carteMonde(id)?.let { "${it.ville} (${it.nomPays})" } },
                 )
             }
             item {

@@ -70,10 +70,20 @@ object Atlases {
     @Volatile
     private var france: Atlas? = null
 
+    @Volatile
+    private var monde: Atlas? = null
+
+    private fun lire(context: Context, ressource: Int): Atlas =
+        Atlas.lire(context.resources.openRawResource(ressource).bufferedReader().use { it.readText() })
+
+    /** Les départements de France métropolitaine. */
     fun france(context: Context): Atlas = france ?: synchronized(this) {
-        france ?: Atlas.lire(
-            context.resources.openRawResource(R.raw.departements).bufferedReader().use { it.readText() },
-        ).also { france = it }
+        france ?: lire(context, R.raw.departements).also { france = it }
+    }
+
+    /** Les pays du monde. */
+    fun monde(context: Context): Atlas = monde ?: synchronized(this) {
+        monde ?: lire(context, R.raw.pays).also { monde = it }
     }
 }
 
@@ -81,6 +91,12 @@ object Atlases {
 fun rememberAtlasFrance(): Atlas {
     val contexte = LocalContext.current
     return remember { Atlases.france(contexte.applicationContext) }
+}
+
+@Composable
+fun rememberAtlasMonde(): Atlas {
+    val contexte = LocalContext.current
+    return remember { Atlases.monde(contexte.applicationContext) }
 }
 
 /** Le contour d'une forme, en unités de carte. */

@@ -30,6 +30,7 @@ import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.data.CARTES_FRANCE
 import fr.courrierdesnuages.app.data.CARTES_ITALIE
+import fr.courrierdesnuages.app.data.CARTES_MONDE
 import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.REVISIONS_FRANCAIS
 import fr.courrierdesnuages.app.data.REVISIONS_MATHS
@@ -51,6 +52,7 @@ import fr.courrierdesnuages.app.langues.RecompenseLangue
 import fr.courrierdesnuages.app.langues.SeanceLangue
 import fr.courrierdesnuages.app.langues.SemaineLangue
 import fr.courrierdesnuages.app.maj.MiseAJour
+import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
 import fr.courrierdesnuages.app.maj.NouvelleVersion
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.son.Voix
@@ -84,6 +86,9 @@ sealed interface Ecran {
     data class CarteDepartement(val idProfil: String, val code: String, val nouvelle: Boolean) : Ecran
     data class EpinglerDepartement(val idProfil: String, val code: String) : Ecran
     data class AlbumFrance(val idProfil: String) : Ecran
+    data class CarteMondeVue(val idProfil: String, val id: String, val nouvelle: Boolean) : Ecran
+    data class EpinglerMonde(val idProfil: String, val id: String) : Ecran
+    data class AlbumMonde(val idProfil: String) : Ecran
     data class MotsLangue(val langue: Langue) : Ecran
     data object NouvelleCarte : Ecran
     data class VoirClassement(val idProfil: String) : Ecran
@@ -317,6 +322,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CarteDepartement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.EpinglerDepartement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.AlbumFrance -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.CarteMondeVue -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.EpinglerMonde -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.AlbumMonde -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.VoirClassement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Tournee -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Suivi -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
@@ -437,6 +445,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CarteDepartement -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.AlbumFrance(e.idProfil)
             is Ecran.EpinglerDepartement -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.AlbumFrance -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.CarteMondeVue -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.AlbumMonde(e.idProfil)
+            is Ecran.EpinglerMonde -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.AlbumMonde -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.VoirClassement -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Tournee -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Suivi -> Ecran.EspaceParent
@@ -456,7 +467,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             voix
             sons
             // La carte de France des albums se lit pendant ce temps.
-            viewModelScope.launch(Dispatchers.Default) { runCatching { Atlases.france(getApplication()) } }
+            viewModelScope.launch(Dispatchers.Default) {
+                runCatching {
+                    Atlases.france(getApplication())
+                    Atlases.monde(getApplication())
+                }
+            }
             ecran = Ecran.AccueilEnfant(profil.id)
         }
         return bon
@@ -959,7 +975,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Une carte de l'album de la langue que l'enfant n'a pas encore. */
     private fun tirerCarteDeLangue(langue: Langue, gagnees: List<CarteGagnee>): String? = when (langue) {
         Langue.ITALIEN -> RecompenseLangue.tirer(toutesLesCartes, { it.id }, gagnees)?.id
-        Langue.ANGLAIS -> null
+        Langue.ANGLAIS -> RecompenseLangue.tirer(TOUR_DU_MONDE, { it.id }, gagnees)?.id
     }
 
     fun quitterLangue() {
@@ -1080,7 +1096,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         seanceLangue = null
         ecran = when (s.langue) {
             Langue.ITALIEN -> Ecran.CartePostaleVue(s.profil.id, carte, nouvelle = true)
-            Langue.ANGLAIS -> Ecran.AccueilEnfant(s.profil.id)
+            Langue.ANGLAIS -> Ecran.CarteMondeVue(s.profil.id, carte, nouvelle = true)
         }
     }
 
@@ -1118,6 +1134,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun ouvrirAlbumFrance(profil: Profil) {
         donnees(profil.id)
         ecran = Ecran.AlbumFrance(profil.id)
+    }
+
+    // ---------- Le tour du monde anglophone ----------
+
+    fun ouvrirCarteMonde(profil: Profil, id: String, nouvelle: Boolean) {
+        ecran = Ecran.CarteMondeVue(profil.id, id, nouvelle)
+    }
+
+    fun ouvrirEpingleMonde(profil: Profil, id: String) {
+        ecran = Ecran.EpinglerMonde(profil.id, id)
+    }
+
+    fun epinglerMonde(profil: Profil, id: String, bienPlacee: Boolean) {
+        depot.marquerEpinglee(profil.id, CARTES_MONDE, id, bienPlacee)
+    }
+
+    fun ouvrirAlbumMonde(profil: Profil) {
+        donnees(profil.id)
+        ecran = Ecran.AlbumMonde(profil.id)
     }
 
     fun ouvrirClassement(profil: Profil) {

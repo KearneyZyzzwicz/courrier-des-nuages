@@ -1,8 +1,11 @@
 package fr.courrierdesnuages.app.cartes
 
+import kotlin.math.PI
 import kotlin.math.hypot
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.tan
 
 /**
  * Une forme de la carte (un département, un pays) : ses contours en unités de carte (la carte
@@ -92,12 +95,18 @@ class Atlas(
     private val latitudeHaut: Double,
     private val cosinus: Double,
     private val echelle: Double,
+    /** Projection de Miller (carte du monde) plutôt qu'équirectangulaire (carte d'un pays). */
+    private val miller: Boolean,
     val formes: Map<String, Forme>,
 ) {
+    /** La latitude « projetée », en degrés : un peu étirée vers les pôles avec Miller. */
+    private fun projetee(latitude: Double): Double =
+        if (miller) 1.25 * ln(tan(PI / 4 + 0.4 * Math.toRadians(latitude))) * 180 / PI else latitude
+
     /** La position d'un lieu sur la carte, en unités de carte. */
     fun position(latitude: Double, longitude: Double): Pair<Float, Float> = Pair(
         ((longitude - longitudeGauche) * cosinus * echelle).toFloat(),
-        ((latitudeHaut - latitude) * echelle).toFloat(),
+        ((projetee(latitudeHaut) - projetee(latitude)) * echelle).toFloat(),
     )
 
     /** La forme sous le point, s'il y en a une. */
@@ -162,6 +171,7 @@ class Atlas(
                 latitudeHaut = e[3].toDouble(),
                 cosinus = e[4].toDouble(),
                 echelle = e[5].toDouble(),
+                miller = e.getOrNull(6) == "miller",
                 formes = formes,
             )
         }
