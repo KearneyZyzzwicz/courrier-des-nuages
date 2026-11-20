@@ -76,6 +76,7 @@ jobs:
         env:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
+          set -o pipefail
           OPTION_CLE=""
           if [ "${{ steps.cle.outputs.signature }}" = "oui" ]; then
             OPTION_CLE="-PkeystorePath=$GITHUB_WORKSPACE/signing/release.jks"
