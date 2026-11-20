@@ -314,6 +314,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CartePostaleVue -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Epingler -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Album -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.CarteDepartement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.EpinglerDepartement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.AlbumFrance -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.VoirClassement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Tournee -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Suivi -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
