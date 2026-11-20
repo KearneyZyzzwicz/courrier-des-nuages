@@ -1,6 +1,7 @@
-package fr.courrierdesnuages.app.italien
+package fr.courrierdesnuages.app.langues
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -60,13 +63,16 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.courrierdesnuages.app.R
+import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.ClavierAzerty
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
+import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
 import fr.courrierdesnuages.app.ui.composants.Carte
 import fr.courrierdesnuages.app.ui.composants.TamponBravo
 import fr.courrierdesnuages.app.ui.theme.Andika
+import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
 import fr.courrierdesnuages.app.ui.theme.Jaune
@@ -75,16 +81,35 @@ import fr.courrierdesnuages.app.ui.theme.RougeFonce
 import fr.courrierdesnuages.app.ui.theme.Vert
 import kotlin.math.roundToInt
 
-val ACCENTS_ITALIENS = listOf("à", "è", "é", "ì", "ò", "ù")
-
 private val Papier = Color(0xFFFFF6DE)
 private val PapierFonce = Color(0xFFE9D9AF)
 
-/** Le pigeon voyageur : il apporte le mot du soir, roulé dans le tube attaché à sa patte. */
+/** Le messager de chaque langue : il apporte le message, roulé dans le tube attaché à sa patte. */
+data class Messager(
+    val nom: String,
+    @param:DrawableRes val image: Int,
+    /** « une carte postale d'Italie » : ce qu'il rapporte pour une semaine sans faute. */
+    val recompense: String,
+    val bravo: String,
+)
+
+/** La couleur de chaque langue (tuile de l'accueil, classement, suivi). */
+fun couleurDe(langue: Langue): Color = when (langue) {
+    Langue.ITALIEN -> Jaune
+    Langue.ANGLAIS -> Color(0xFF4F86C6)
+}
+
+fun messagerDe(langue: Langue): Messager = when (langue) {
+    Langue.ITALIEN -> Messager("Le pigeon voyageur", R.drawable.pigeon, "une carte postale d'Italie", "Bravissimo !")
+    Langue.ANGLAIS -> Messager("L'albatros voyageur", R.drawable.albatros, "une carte postale du tour du monde", "Well done!")
+}
+
+/** La séance d'une langue : le messager apporte le mot, l'enfant répond selon le mode choisi par le parent. */
 @Composable
-fun EcranPigeon(seance: SeanceItalien, sons: Sons, onQuitter: () -> Unit, onOuvrirCarte: () -> Unit) {
+fun EcranLangue(seance: SeanceLangue, sons: Sons, onQuitter: () -> Unit, onOuvrirCarte: () -> Unit) {
+    val messager = messagerDe(seance.langue)
     var confirmerArret by remember { mutableStateOf(false) }
-    val enCours = seance.etape != EtapeItalien.FIN
+    val enCours = seance.etape != EtapeLangue.FIN
     BackHandler { if (enCours) confirmerArret = true else onQuitter() }
 
     val vue = LocalView.current
@@ -107,7 +132,7 @@ fun EcranPigeon(seance: SeanceItalien, sons: Sons, onQuitter: () -> Unit, onOuvr
                 Text(
                     when {
                         seance.enRattrapage -> "On revoit les mots ratés"
-                        seance.compte -> "Le pigeon voyageur"
+                        seance.compte -> messager.nom
                         else -> "Entraînement"
                     },
                     style = MaterialTheme.typography.titleMedium,
@@ -126,13 +151,13 @@ fun EcranPigeon(seance: SeanceItalien, sons: Sons, onQuitter: () -> Unit, onOuvr
                 )
             }
         }
-        if (enCours) DeroulementItalien(seance, sons) else ResumeItalien(seance, onQuitter, onOuvrirCarte)
+        if (enCours) Deroulement(seance, messager, sons) else Resume(seance, messager, onQuitter, onOuvrirCarte)
     }
 
     if (confirmerArret) {
         AlertDialog(
             onDismissRequest = { confirmerArret = false },
-            title = { Text("Arrêter le pigeon voyageur ?") },
+            title = { Text("Arrêter ${messager.nom.replaceFirstChar { it.lowercase() }} ?") },
             text = {
                 Text(
                     if (seance.compte && !seance.enRattrapage) {
@@ -155,7 +180,7 @@ fun EcranPigeon(seance: SeanceItalien, sons: Sons, onQuitter: () -> Unit, onOuvr
 }
 
 @Composable
-private fun DeroulementItalien(seance: SeanceItalien, sons: Sons) {
+private fun Deroulement(seance: SeanceLangue, messager: Messager, sons: Sons) {
     val etape = seance.etape
     Column(Modifier.fillMaxSize()) {
         Box(
@@ -165,23 +190,29 @@ private fun DeroulementItalien(seance: SeanceItalien, sons: Sons) {
             contentAlignment = Alignment.Center,
         ) {
             when (etape) {
-                EtapeItalien.PIGEON -> ArriveeDuPigeon(seance.passage, onDerouler = { seance.deroule() })
-                EtapeItalien.BRAVO -> TamponBravo(
+                EtapeLangue.MESSAGER -> ArriveeDuMessager(seance.passage, messager, onDerouler = { seance.deroule() })
+                EtapeLangue.BRAVO -> TamponBravo(
                     texte = when {
-                        seance.enRattrapage || !seance.compte -> "Bravissimo !"
+                        seance.enRattrapage || !seance.compte -> messager.bravo
                         seance.dernierPoint >= 1.0 -> "+1 point"
                         else -> "+½ point"
                     },
                     sons = sons,
                     onFini = { seance.apresBravo() },
                 )
-                else -> MessageDeroule(seance.mot.francais, italien = if (etape == EtapeItalien.RECOPIE) seance.mot.italien else null)
+                else -> MessageDeroule(
+                    francais = seance.mot.francais,
+                    traduction = if (etape == EtapeLangue.RECOPIE) seance.mot.traduction else null,
+                    langue = seance.langue,
+                )
             }
         }
 
         val message = seance.message ?: when (etape) {
-            EtapeItalien.PIGEON -> "Touche le tube pour dérouler le message."
-            EtapeItalien.CHOIX -> "Touche le mot italien qui veut dire la même chose."
+            EtapeLangue.MESSAGER -> "Touche le tube pour dérouler le message."
+            EtapeLangue.CHOIX -> "Touche le mot ${seance.langue.adjectif} qui veut dire la même chose."
+            EtapeLangue.SAISIE -> "Écris ce mot en ${seance.langue.adjectif}, puis appuie sur Valider."
+            EtapeLangue.LETTRES -> "Remets les lettres dans l'ordre."
             else -> ""
         }
         Text(
@@ -194,11 +225,13 @@ private fun DeroulementItalien(seance: SeanceItalien, sons: Sons) {
                 .padding(horizontal = 16.dp, vertical = 6.dp),
         )
 
-        when (etape) {
-            EtapeItalien.CHOIX, EtapeItalien.CORRECTION, EtapeItalien.BRAVO -> {
+        val enChoix = etape == EtapeLangue.CHOIX || etape == EtapeLangue.CORRECTION ||
+            (etape == EtapeLangue.BRAVO && seance.vignettes.isNotEmpty())
+        when {
+            enChoix -> {
                 Vignettes(seance)
                 Spacer(Modifier.weight(1f))
-                if (etape == EtapeItalien.CORRECTION) {
+                if (etape == EtapeLangue.CORRECTION) {
                     BoutonPrincipal(
                         texte = "Je recopie le bon mot",
                         onClick = { seance.allerALaRecopie() },
@@ -208,15 +241,20 @@ private fun DeroulementItalien(seance: SeanceItalien, sons: Sons) {
                     )
                 }
             }
-            EtapeItalien.RECOPIE -> {
-                ArdoiseItalien(seance.saisie, juste = false, actif = true)
+            etape == EtapeLangue.LETTRES -> {
+                Cases(seance)
+                Spacer(Modifier.weight(1f))
+                Tuiles(seance)
+            }
+            etape == EtapeLangue.SAISIE || etape == EtapeLangue.RECOPIE || etape == EtapeLangue.BRAVO -> {
+                Ardoise(seance.saisie, juste = etape == EtapeLangue.BRAVO, actif = etape != EtapeLangue.BRAVO)
                 Spacer(Modifier.weight(1f))
                 ClavierAzerty(
                     onTexte = { seance.taper(it) },
                     onEffacer = { seance.effacer() },
                     onValider = { seance.valider() },
-                    actif = true,
-                    accents = ACCENTS_ITALIENS,
+                    actif = etape == EtapeLangue.SAISIE || etape == EtapeLangue.RECOPIE,
+                    accents = seance.langue.accents,
                     accentsPlus = emptyList(),
                 )
             }
@@ -226,12 +264,12 @@ private fun DeroulementItalien(seance: SeanceItalien, sons: Sons) {
 }
 
 /**
- * Les 4 vignettes : la bonne traduction et 3 autres mots de la semaine. Après le choix, la bonne
+ * Les vignettes : la bonne traduction et 3 autres mots de la semaine. Après le choix, la bonne
  * s'allume en vert, et celle touchée par erreur en rouge.
  */
 @Composable
-private fun Vignettes(seance: SeanceItalien) {
-    val choix = seance.etape == EtapeItalien.CHOIX
+private fun Vignettes(seance: SeanceLangue) {
+    val choix = seance.etape == EtapeLangue.CHOIX
     Column(
         Modifier
             .fillMaxWidth()
@@ -277,9 +315,9 @@ private fun Vignettes(seance: SeanceItalien) {
     }
 }
 
-/** Le pigeon arrive en volant, se pose, et attend qu'on déroule le message de son tube. */
+/** Le messager arrive en volant, se pose, et attend qu'on déroule le message de son tube. */
 @Composable
-private fun ArriveeDuPigeon(passage: Int, onDerouler: () -> Unit) {
+private fun ArriveeDuMessager(passage: Int, messager: Messager, onDerouler: () -> Unit) {
     val densite = LocalDensity.current
     val vol = remember(passage) { Animatable(0f) }
     LaunchedEffect(passage) {
@@ -309,8 +347,8 @@ private fun ArriveeDuPigeon(passage: Int, onDerouler: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
-                painter = painterResource(R.drawable.pigeon),
-                contentDescription = "Le pigeon voyageur",
+                painter = painterResource(messager.image),
+                contentDescription = messager.nom,
                 modifier = Modifier.size(width = 150.dp, height = 132.dp),
             )
             // Le petit tube du message, attaché à la patte.
@@ -340,7 +378,7 @@ private fun ArriveeDuPigeon(passage: Int, onDerouler: () -> Unit) {
 
 /** Le message déroulé : le mot en français, qui reste affiché. */
 @Composable
-private fun MessageDeroule(francais: String, italien: String?) {
+private fun MessageDeroule(francais: String, traduction: String?, langue: Langue) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(
             shape = RoundedCornerShape(6.dp),
@@ -362,11 +400,11 @@ private fun MessageDeroule(francais: String, italien: String?) {
                 )
             }
         }
-        if (italien != null) {
+        if (traduction != null) {
             Spacer(Modifier.height(10.dp))
             Surface(shape = RoundedCornerShape(14.dp), color = Jaune.copy(alpha = 0.35f), contentColor = Encre) {
                 Text(
-                    "En italien : $italien",
+                    "En ${langue.adjectif} : $traduction",
                     style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 24.sp),
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
                 )
@@ -376,7 +414,7 @@ private fun MessageDeroule(francais: String, italien: String?) {
 }
 
 @Composable
-private fun ArdoiseItalien(texte: String, juste: Boolean, actif: Boolean) {
+private fun Ardoise(texte: String, juste: Boolean, actif: Boolean) {
     val clignote = rememberInfiniteTransition(label = "curseur")
     val visible = clignote.animateFloat(
         initialValue = 1f,
@@ -416,8 +454,102 @@ private fun ArdoiseItalien(texte: String, juste: Boolean, actif: Boolean) {
     }
 }
 
+// ---------- Les lettres mélangées ----------
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ResumeItalien(seance: SeanceItalien, onRetour: () -> Unit, onOuvrirCarte: () -> Unit) {
+private fun Cases(seance: SeanceLangue) {
+    val modele = Mots.normaliser(seance.mot.traduction)
+    val lettres = seance.posees.map { seance.tirage[it] }
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        var i = 0
+        for (c in modele) {
+            if (c == ' ') {
+                Spacer(Modifier.width(16.dp))
+            } else {
+                val lettre = lettres.getOrNull(i)
+                i++
+                Box(
+                    Modifier
+                        .size(width = 34.dp, height = 46.dp)
+                        .background(Color.White, RoundedCornerShape(8.dp))
+                        .border(2.dp, if (lettre != null) Encre else Encre.copy(alpha = 0.25f), RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (lettre != null) {
+                        Text(
+                            lettre.toString(),
+                            style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Encre),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Tuiles(seance: SeanceLangue) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            seance.tirage.forEachIndexed { position, lettre ->
+                val utilisee = position in seance.posees
+                Surface(
+                    onClick = { seance.poserTuile(position) },
+                    enabled = !utilisee,
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (utilisee) CielBas else Jaune,
+                    contentColor = Encre,
+                    shadowElevation = if (utilisee) 0.dp else 2.dp,
+                    modifier = Modifier.size(54.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            lettre.toString(),
+                            style = TextStyle(
+                                fontFamily = Andika,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 26.sp,
+                                color = if (utilisee) Encre.copy(alpha = 0.25f) else Encre,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BoutonSecondaire(texte = "Effacer", onClick = { seance.retirerTuile() })
+            BoutonPrincipal(
+                texte = "Valider",
+                onClick = { seance.validerTuiles() },
+                actif = seance.posees.size == seance.tirage.size,
+                couleur = Vert,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+// ---------- Fin de séance ----------
+
+@Composable
+private fun Resume(seance: SeanceLangue, messager: Messager, onRetour: () -> Unit, onOuvrirCarte: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
@@ -428,7 +560,7 @@ private fun ResumeItalien(seance: SeanceItalien, onRetour: () -> Unit, onOuvrirC
         Spacer(Modifier.height(12.dp))
         val carte = seance.carteGagnee
         if (carte != null) {
-            Image(painterResource(R.drawable.pigeon), contentDescription = null, modifier = Modifier.size(140.dp))
+            Image(painterResource(messager.image), contentDescription = null, modifier = Modifier.size(140.dp))
             Text(
                 "Une semaine sans faute !",
                 style = MaterialTheme.typography.headlineMedium,
@@ -436,7 +568,7 @@ private fun ResumeItalien(seance: SeanceItalien, onRetour: () -> Unit, onOuvrirC
                 textAlign = TextAlign.Center,
             )
             Text(
-                "Le pigeon t'apporte une carte postale d'Italie.",
+                "${messager.nom} t'apporte ${messager.recompense}.",
                 style = MaterialTheme.typography.titleMedium,
                 color = EncreDouce,
                 textAlign = TextAlign.Center,
@@ -448,7 +580,7 @@ private fun ResumeItalien(seance: SeanceItalien, onRetour: () -> Unit, onOuvrirC
         if (seance.compte) {
             Text("${pointsEnTexte(seance.points)} / ${seance.ordre.size}", style = MaterialTheme.typography.displaySmall, color = Encre)
             Text(
-                if (seance.fautes == 0) "Tout juste du premier coup, bravissimo !" else "Le mot pas su reviendra demain.",
+                if (seance.fautes == 0) "Tout juste du premier coup, ${messager.bravo.lowercase().trimEnd('!', ' ')} !" else "Les mots pas sus reviendront demain.",
                 style = MaterialTheme.typography.titleMedium,
                 color = EncreDouce,
                 textAlign = TextAlign.Center,
@@ -459,7 +591,7 @@ private fun ResumeItalien(seance: SeanceItalien, onRetour: () -> Unit, onOuvrirC
         Spacer(Modifier.height(16.dp))
         Carte(Modifier.fillMaxWidth()) {
             for (r in seance.resultats) {
-                val mot = MotItalien.lire(r.mot) ?: continue
+                val mot = MotLangue.lire(r.mot) ?: continue
                 Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     val (signe, couleur) = when {
                         r.points >= 1.0 -> "✓" to Vert
@@ -471,7 +603,7 @@ private fun ResumeItalien(seance: SeanceItalien, onRetour: () -> Unit, onOuvrirC
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(mot.italien, style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Encre))
+                        Text(mot.traduction, style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Encre))
                         Text(mot.francais, style = MaterialTheme.typography.bodyMedium, color = EncreDouce)
                     }
                     if (seance.compte) Text(pointsEnTexte(r.points), style = MaterialTheme.typography.titleMedium, color = EncreDouce)

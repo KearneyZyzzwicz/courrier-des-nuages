@@ -1,6 +1,9 @@
 package fr.courrierdesnuages.app.suivi
 
 import fr.courrierdesnuages.app.calcul.Calcul
+import fr.courrierdesnuages.app.data.CARTES_FRANCE
+import fr.courrierdesnuages.app.data.CARTES_ITALIE
+import fr.courrierdesnuages.app.langues.Langue
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Revision
@@ -26,8 +29,10 @@ object RemiseAZero {
         val aSupprimer: List<String>,
         /** Ce que la séance avait ajouté aux compteurs de l'année (séance terminée seulement). */
         val retrait: Ajout?,
-        /** La carte postale de la semaine, si c'est cette séance qui l'a rapportée. */
+        /** La carte postale, si c'est cette séance qui l'a rapportée. */
         val idCarte: String?,
+        /** L'album de cette carte. */
+        val collectionCarte: String = CARTES_ITALIE,
     )
 
     /**
@@ -43,6 +48,11 @@ object RemiseAZero {
         else -> Mots.cle(mot)
     }
 
+    /**
+     * [cartesGagnees] : les cartes de l'album de la matière (Italie, monde anglophone ou France).
+     * En langue, la carte de la semaine est retirée si c'est cette séance qui l'a rapportée ; en
+     * français, la carte rapportée par cette séance à 100 %.
+     */
     fun preparer(seance: Seance, cartesGagnees: List<CarteGagnee>): Plan {
         val aRestaurer = ArrayList<Revision>()
         val aSupprimer = ArrayList<String>()
@@ -61,11 +71,15 @@ object RemiseAZero {
                 }
             }
         }
-        val carte = if (seance.terminee && seance.matiere == Matiere.ITALIEN) {
-            val lundi = runCatching { Semaines.lundi(LocalDate.parse(seance.soir)).toString() }.getOrNull()
-            cartesGagnees.firstOrNull { it.semaine == lundi && it.gagneeLe >= seance.debutLe }
-        } else {
-            null
+        val langue = Langue.depuisMatiere(seance.matiere)
+        val carte = when {
+            !seance.terminee -> null
+            langue != null -> {
+                val lundi = runCatching { Semaines.lundi(LocalDate.parse(seance.soir)).toString() }.getOrNull()
+                cartesGagnees.firstOrNull { it.semaine == lundi && it.gagneeLe >= seance.debutLe }
+            }
+            seance.matiere == Matiere.FRANCAIS -> cartesGagnees.firstOrNull { it.semaine == seance.id }
+            else -> null
         }
         return Plan(
             idSeance = seance.id,
@@ -73,6 +87,7 @@ object RemiseAZero {
             aSupprimer = aSupprimer.distinct(),
             retrait = if (seance.terminee) Classement.pourSeance(seance) else null,
             idCarte = carte?.idCarte,
+            collectionCarte = langue?.collectionCartes ?: CARTES_FRANCE,
         )
     }
 }

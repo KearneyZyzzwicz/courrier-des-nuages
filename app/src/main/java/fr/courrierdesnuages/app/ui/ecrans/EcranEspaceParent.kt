@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.italien.Semaines
+import fr.courrierdesnuages.app.langues.Langue
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.data.Seance
@@ -110,27 +111,16 @@ fun EcranEspaceParent(vm: AppViewModel) {
             }
 
             Carte(Modifier.fillMaxWidth()) {
-                Text("Italien de la semaine", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(6.dp))
-                val lundi = Semaines.semaineAPreparer(LocalDate.now()).toString()
-                val semaine = vm.semaine(lundi)
-                val nombre = semaine?.mots?.count { it.complet } ?: 0
+                Text("Langues", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    when {
-                        !vm.semaineChargee(lundi) -> "Chargement…"
-                        nombre == 0 -> "Semaine du ${Jours.enClair(lundi)} : les 5 mots ne sont pas encore saisis."
-                        else -> "Semaine du ${Jours.enClair(lundi)} : " +
-                            semaine?.mots?.filter { it.complet }?.joinToString(", ") { it.italien }.orEmpty() + "."
-                    },
+                    "Les mots de chaque jour, les mêmes pour les trois enfants.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = EncreDouce,
                 )
-                Spacer(Modifier.height(10.dp))
-                BoutonPrincipal(
-                    texte = if (nombre == 0) "Saisir les 5 mots" else "Modifier les mots",
-                    onClick = { vm.ouvrirMotsItalien() },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                for (langue in Langue.entries) {
+                    LigneLangue(vm, langue)
+                }
             }
 
             Carte(Modifier.fillMaxWidth()) {
@@ -285,8 +275,10 @@ private fun resumeDuJour(vm: AppViewModel, p: Profil): String {
     val parties = buildList {
         if (soir != null && soir.mots.isNotEmpty()) add("Français " + etat(d.seance(soir.date, Matiere.FRANCAIS)))
         if (soir != null && soir.tables.isNotEmpty()) add("Maths " + etat(d.seance(soir.date, Matiere.MATHS)))
-        val italien = d.seance(Jours.aujourdhui(), Matiere.ITALIEN)
-        if (italien != null || vm.motsDuSoirItalien(p).isNotEmpty()) add("Italien " + etat(italien))
+        for (langue in Langue.entries) {
+            val seance = d.seance(Jours.aujourdhui(), langue.matiere)
+            if (seance != null || vm.motsDuSoir(langue, p).isNotEmpty()) add(langue.nom + " " + etat(seance))
+        }
     }
     return if (parties.isEmpty()) "Rien à faire aujourd'hui" else parties.joinToString(" · ")
 }
@@ -399,4 +391,31 @@ private fun DialogueOffrirCarte(vm: AppViewModel, profil: Profil, onFermer: () -
         confirmButton = { TextButton(onClick = onFermer) { Text("Annuler") } },
         containerColor = Color.White,
     )
+}
+
+/** Une langue dans l'espace parent : les mots d'aujourd'hui et de la semaine, et le bouton pour les préparer. */
+@Composable
+private fun LigneLangue(vm: AppViewModel, langue: Langue) {
+    val aujourdhui = LocalDate.now()
+    val lundi = Semaines.lundi(aujourdhui).toString()
+    val semaine = vm.semaine(langue, lundi)
+    val duJour = semaine?.motsDuJour(Semaines.numeroDuJour(aujourdhui)).orEmpty()
+    val dansLaSemaine = semaine?.tous?.size ?: 0
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(langue.nom, style = MaterialTheme.typography.titleMedium)
+            Text(
+                when {
+                    !vm.semaineChargee(langue, lundi) -> "Chargement…"
+                    dansLaSemaine == 0 -> "Pas encore de mot cette semaine."
+                    duJour.isEmpty() -> "Aucun mot aujourd'hui, $dansLaSemaine dans la semaine."
+                    else -> "Aujourd'hui : " + duJour.joinToString(", ") { it.traduction } + "."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = EncreDouce,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        BoutonSecondaire(texte = "Préparer", onClick = { vm.ouvrirMotsLangue(langue) })
+    }
 }

@@ -5,7 +5,7 @@ import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
-import fr.courrierdesnuages.app.italien.MotItalien
+import fr.courrierdesnuages.app.langues.MotLangue
 import java.time.LocalDate
 
 /** Le résultat d'une matière un jour donné, vu par le parent. */
@@ -24,7 +24,7 @@ sealed interface Case {
 }
 
 /** Une ligne du suivi jour par jour ; une matière à null n'avait rien de programmé ce jour-là. */
-data class JourDeSuivi(val jour: String, val francais: Case?, val maths: Case?, val italien: Case?)
+data class JourDeSuivi(val jour: String, val francais: Case?, val maths: Case?, val italien: Case?, val anglais: Case? = null)
 
 /** Un mot ou un calcul raté, et le nombre de fois où il n'a pas été su du premier coup. */
 data class Rate(val texte: String, val fois: Int)
@@ -53,8 +53,9 @@ object Suivi {
                 francais = caseProgrammee(soir?.mots?.isNotEmpty() == true, parId[Seance.idSeance(jour, Matiere.FRANCAIS)], estOuvert),
                 maths = caseProgrammee(soir?.tables?.isNotEmpty() == true, parId[Seance.idSeance(jour, Matiere.MATHS)], estOuvert),
                 italien = parId[Seance.idSeance(jour, Matiere.ITALIEN)]?.let { caseSeance(it, ouverte = jour == aujourdhui) },
+                anglais = parId[Seance.idSeance(jour, Matiere.ANGLAIS)]?.let { caseSeance(it, ouverte = jour == aujourdhui) },
             )
-        }.filter { it.francais != null || it.maths != null || it.italien != null }
+        }.filter { it.francais != null || it.maths != null || it.italien != null || it.anglais != null }
     }
 
     private fun caseProgrammee(programme: Boolean, s: Seance?, ouvert: Boolean): Case? = when {
@@ -66,7 +67,7 @@ object Suivi {
 
     private fun caseSeance(s: Seance, ouverte: Boolean): Case =
         if (s.terminee) {
-            Case.Faite(s.points, s.ordre.size, if (s.matiere == Matiere.ITALIEN) Medaille.AUCUNE else s.medaille)
+            Case.Faite(s.points, s.ordre.size, if (Matiere.aDesMedailles(s.matiere)) s.medaille else Medaille.AUCUNE)
         } else {
             Case.Commencee(s.points, s.resultats.size, s.ordre.size, ouverte)
         }
@@ -83,7 +84,7 @@ object Suivi {
                 if (r.points >= 1.0) continue
                 val texte = when (matiere) {
                     Matiere.MATHS -> Calcul.lire(r.mot)?.canonique?.texte ?: r.mot
-                    Matiere.ITALIEN -> MotItalien.lire(r.mot)?.let { "${it.italien} (${it.francais})" } ?: r.mot
+                    Matiere.ITALIEN, Matiere.ANGLAIS -> MotLangue.lire(r.mot)?.let { "${it.traduction} (${it.francais})" } ?: r.mot
                     else -> r.mot
                 }
                 compte[texte] = (compte[texte] ?: 0) + 1

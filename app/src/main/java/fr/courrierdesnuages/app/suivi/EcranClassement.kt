@@ -32,6 +32,8 @@ import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.MedaillesGagnees
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.dictee.DessinMedaille
+import fr.courrierdesnuages.app.langues.Langue
+import fr.courrierdesnuages.app.langues.couleurDe
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
 import fr.courrierdesnuages.app.ui.composants.Carte
@@ -56,7 +58,8 @@ internal data class MatiereAffichee(
 internal val MATIERES_AFFICHEES = listOf(
     MatiereAffichee(Matiere.FRANCAIS, "Français", "Aa", Rouge, medailles = true),
     MatiereAffichee(Matiere.MATHS, "Maths", "+×", Vert, medailles = true),
-    MatiereAffichee(Matiere.ITALIEN, "Italien", "Ciao", Jaune, medailles = false),
+    MatiereAffichee(Matiere.ITALIEN, "Italien", "Ciao", couleurDe(Langue.ITALIEN), medailles = false),
+    MatiereAffichee(Matiere.ANGLAIS, "Anglais", "Hello", couleurDe(Langue.ANGLAIS), medailles = false),
 )
 
 /** Les classements de l'année, et la collection de médailles de l'enfant. */

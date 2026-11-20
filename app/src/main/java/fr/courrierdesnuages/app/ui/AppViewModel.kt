@@ -27,8 +27,8 @@ import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.data.CARTES_ITALIE
 import fr.courrierdesnuages.app.data.REVISIONS_FRANCAIS
-import fr.courrierdesnuages.app.data.REVISIONS_ITALIEN
 import fr.courrierdesnuages.app.data.REVISIONS_MATHS
 import fr.courrierdesnuages.app.data.ResultatMot
 import fr.courrierdesnuages.app.data.Revision
@@ -38,12 +38,14 @@ import fr.courrierdesnuages.app.dictee.SeanceDictee
 import fr.courrierdesnuages.app.italien.CARTES_INTEGREES
 import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.italien.CartePostale
-import fr.courrierdesnuages.app.italien.MotItalien
-import fr.courrierdesnuages.app.italien.RecompenseItalien
-import fr.courrierdesnuages.app.italien.SeanceItalien
-import fr.courrierdesnuages.app.italien.SemaineItalien
 import fr.courrierdesnuages.app.italien.Semaines
 import fr.courrierdesnuages.app.italien.Ville
+import fr.courrierdesnuages.app.langues.Langue
+import fr.courrierdesnuages.app.langues.ModeReponse
+import fr.courrierdesnuages.app.langues.MotLangue
+import fr.courrierdesnuages.app.langues.RecompenseLangue
+import fr.courrierdesnuages.app.langues.SeanceLangue
+import fr.courrierdesnuages.app.langues.SemaineLangue
 import fr.courrierdesnuages.app.maj.MiseAJour
 import fr.courrierdesnuages.app.maj.NouvelleVersion
 import fr.courrierdesnuages.app.son.Sons
@@ -70,11 +72,11 @@ sealed interface Ecran {
     data class LectureListe(val idProfil: String, val image: String?) : Ecran
     data class Dictee(val idProfil: String) : Ecran
     data class TriDesColis(val idProfil: String) : Ecran
-    data class Pigeon(val idProfil: String) : Ecran
+    data class SeanceDeLangue(val idProfil: String, val langue: Langue) : Ecran
     data class CartePostaleVue(val idProfil: String, val idCarte: String, val nouvelle: Boolean) : Ecran
     data class Epingler(val idProfil: String, val idCarte: String) : Ecran
     data class Album(val idProfil: String) : Ecran
-    data object MotsItalien : Ecran
+    data class MotsLangue(val langue: Langue) : Ecran
     data object NouvelleCarte : Ecran
     data class VoirClassement(val idProfil: String) : Ecran
     data class Tournee(val idProfil: String) : Ecran
@@ -144,12 +146,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var seanceCalcul by mutableStateOf<SeanceCalcul?>(null)
         private set
 
-    // Pigeon voyageur en cours
-    var seanceItalien by mutableStateOf<SeanceItalien?>(null)
+    // Séance de langue en cours (le pigeon voyageur pour l'italien, l'albatros pour l'anglais)
+    var seanceLangue by mutableStateOf<SeanceLangue?>(null)
         private set
 
-    /** Les semaines d'italien suivies (lundi → mots, ou null si le parent ne les a pas encore saisis). */
-    var semaines by mutableStateOf<Map<String, SemaineItalien?>>(emptyMap())
+    /**
+     * Les semaines de mots suivies, par langue (« italien:2026-11-16 » → mots, ou null si le parent ne
+     * les a pas encore saisis) : la semaine d'avant, celle en cours et la suivante.
+     */
+    var semaines by mutableStateOf<Map<String, SemaineLangue?>>(emptyMap())
         private set
     var cartesDuParent by mutableStateOf<List<CartePostale>>(emptyList())
         private set
@@ -233,24 +238,35 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         suivreSemaines()
     }
 
-    /** Suit la semaine en cours et celle que le parent prépare (la suivante, le week-end). */
+    /**
+     * Suit, pour chaque langue, la semaine d'avant (pour les vignettes), celle en cours et la suivante
+     * (que le parent peut préparer à l'avance).
+     */
     private fun suivreSemaines() {
         if (!Compte.estRelie) return
-        val aujourdhui = LocalDate.now()
-        val voulues = setOf(Semaines.lundi(aujourdhui).toString(), Semaines.semaineAPreparer(aujourdhui).toString())
-        for (lundi in ecoutesSemaines.keys.filter { it !in voulues }) ecoutesSemaines.remove(lundi)?.remove()
-        for (lundi in voulues.filter { it !in ecoutesSemaines.keys }) {
-            ecoutesSemaines[lundi] = depot.ecouterSemaineItalien(
-                lundi,
-                rappel = { semaine -> semaines = semaines + (lundi to semaine) },
+        val lundi = Semaines.lundi(LocalDate.now())
+        val voulues = Langue.entries.flatMap { langue ->
+            listOf(lundi.minusWeeks(1), lundi, lundi.plusWeeks(1)).map { langue to it.toString() }
+        }
+        val cles = voulues.map { (langue, l) -> cleSemaine(langue, l) }.toSet()
+        for (cle in ecoutesSemaines.keys.filter { it !in cles }) ecoutesSemaines.remove(cle)?.remove()
+        for ((langue, l) in voulues) {
+            val cle = cleSemaine(langue, l)
+            if (cle in ecoutesSemaines) continue
+            ecoutesSemaines[cle] = depot.ecouterSemaine(
+                langue,
+                l,
+                rappel = { semaine -> semaines = semaines + (cle to semaine) },
                 erreur = { e -> erreurDonnees = messageErreurBase(e) },
             )
         }
     }
 
-    fun semaine(lundi: String): SemaineItalien? = semaines[lundi]
+    private fun cleSemaine(langue: Langue, lundi: String) = "${langue.collectionSemaines}:$lundi"
 
-    fun semaineChargee(lundi: String): Boolean = semaines.containsKey(lundi)
+    fun semaine(langue: Langue, lundi: String): SemaineLangue? = semaines[cleSemaine(langue, lundi)]
+
+    fun semaineChargee(langue: Langue, lundi: String): Boolean = semaines.containsKey(cleSemaine(langue, lundi))
 
     private fun arreterEcoute() {
         ecouteProfils?.remove()
@@ -286,7 +302,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.AccueilEnfant -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Dictee -> if (profil(e.idProfil) == null) fermerDictee(Ecran.ChoixProfil)
             is Ecran.TriDesColis -> if (profil(e.idProfil) == null) fermerCalcul(Ecran.ChoixProfil)
-            is Ecran.Pigeon -> if (profil(e.idProfil) == null) fermerItalien(Ecran.ChoixProfil)
+            is Ecran.SeanceDeLangue -> if (profil(e.idProfil) == null) fermerLangue(Ecran.ChoixProfil)
             is Ecran.CartePostaleVue -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Epingler -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Album -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
@@ -336,7 +352,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun delierTelephone() {
         fermerDictee(Ecran.Relier)
         fermerCalcul(Ecran.Relier)
-        fermerItalien(Ecran.Relier)
+        fermerLangue(Ecran.Relier)
         arreterEcoute()
         Compte.deconnecter()
         profils = emptyList()
@@ -379,7 +395,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun quitter() {
         fermerDictee(Ecran.ChoixProfil)
         fermerCalcul(Ecran.ChoixProfil)
-        fermerItalien(Ecran.ChoixProfil)
+        fermerLangue(Ecran.ChoixProfil)
         messageParent = null
         ecran = Ecran.ChoixProfil
     }
@@ -400,8 +416,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 quitterCalcul()
                 return true
             }
-            is Ecran.Pigeon -> {
-                quitterItalien()
+            is Ecran.SeanceDeLangue -> {
+                quitterLangue()
                 return true
             }
             is Ecran.CartePostaleVue -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.Album(e.idProfil)
@@ -410,7 +426,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.VoirClassement -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Tournee -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Suivi -> Ecran.EspaceParent
-            Ecran.MotsItalien, Ecran.NouvelleCarte -> Ecran.EspaceParent
+            is Ecran.MotsLangue, Ecran.NouvelleCarte -> Ecran.EspaceParent
             else -> Ecran.ChoixProfil
         }
         return true
@@ -768,124 +784,159 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ecran = suite
     }
 
-    // ---------- Le pigeon voyageur ----------
+    // ---------- Les langues : italien et anglais ----------
 
-    /** Les séances d'italien de la semaine, du lundi au dimanche (le week-end sert à rattraper). */
-    private fun seancesItalienDeLaSemaine(d: DonneesEnfant, lundi: String): List<Seance> {
+    /** Les séances d'une langue dans une semaine, du lundi au dimanche. */
+    private fun seancesDeLaSemaine(d: DonneesEnfant, langue: Langue, lundi: String): List<Seance> {
         val dimanche = LocalDate.parse(lundi).plusDays(6).toString()
-        return d.seances.filter { it.matiere == Matiere.ITALIEN && it.soir >= lundi && it.soir <= dimanche }
-    }
-
-    /** Les mots que le pigeon apportera aujourd'hui : le mot du jour, ceux qui attendent et ceux à revoir. */
-    fun motsDuSoirItalien(profil: Profil): List<MotItalien> {
-        val d = donnees(profil.id)
-        val aujourdhui = LocalDate.now()
-        val lundi = Semaines.lundi(aujourdhui).toString()
-        val aRevoir = d.revisionsItalien.mapNotNull { MotItalien.lire(it.mot) }
-        return RecompenseItalien.motsDuSoir(semaine(lundi), aujourdhui, seancesItalienDeLaSemaine(d, lundi), aRevoir)
-    }
-
-    /** Le mot du jour (du lundi au vendredi), s'il a été saisi. */
-    fun motDuJourItalien(): MotItalien? {
-        val aujourdhui = LocalDate.now()
-        return RecompenseItalien.motDuJour(semaine(Semaines.lundi(aujourdhui).toString()), aujourdhui)
+        return d.seances.filter { it.matiere == langue.matiere && it.soir >= lundi && it.soir <= dimanche }
     }
 
     /**
-     * Ouvre le pigeon voyageur de ce soir : le mot du jour, plus ceux qui reviennent. La première séance
-     * compte (et se reprend), les suivantes sont des entraînements.
+     * La façon de répondre d'un mot : celle choisie par le parent dans la semaine en cours (ou celle
+     * d'avant), sinon celle gardée avec le mot à revoir.
      */
-    fun commencerItalien(profil: Profil) {
+    private fun modeDuMot(langue: Langue, code: String, revision: Revision?): ModeReponse {
+        val lundi = Semaines.lundi(LocalDate.now())
+        for (l in listOf(lundi, lundi.minusWeeks(1))) {
+            semaine(langue, l.toString())?.mode(code)?.let { return it }
+        }
+        return ModeReponse.depuisCle(revision?.mode)
+    }
+
+    /** Les mots que le messager apportera aujourd'hui : ceux du jour, ceux qui attendent et ceux à revoir. */
+    fun motsDuSoir(langue: Langue, profil: Profil): List<MotLangue> {
+        val d = donnees(profil.id)
+        val aujourdhui = LocalDate.now()
+        val lundi = Semaines.lundi(aujourdhui).toString()
+        val aRevoir = d.revisionsDe(langue).mapNotNull { r -> MotLangue.lire(r.mot, modeDuMot(langue, r.mot, r)) }
+        return RecompenseLangue.motsDuSoir(semaine(langue, lundi), aujourdhui, seancesDeLaSemaine(d, langue, lundi), aRevoir)
+    }
+
+    /** Les mots que le parent a prévus pour aujourd'hui. */
+    fun motsDuJour(langue: Langue): List<MotLangue> {
+        val aujourdhui = LocalDate.now()
+        return semaine(langue, Semaines.lundi(aujourdhui).toString())?.motsDuJour(Semaines.numeroDuJour(aujourdhui)).orEmpty()
+    }
+
+    /**
+     * Ouvre la séance de langue du jour : les mots du jour, plus ceux qui attendent et ceux qui
+     * reviennent. La première séance du jour compte (et se reprend), les suivantes sont des entraînements.
+     */
+    fun commencerLangue(langue: Langue, profil: Profil) {
         val d = donnees(profil.id)
         val jour = Jours.aujourdhui()
-        val existante = d.seance(jour, Matiere.ITALIEN)
+        val existante = d.seance(jour, langue.matiere)
         val maintenant = System.currentTimeMillis()
-        // Les vignettes sont tirées parmi les mots italiens de la semaine.
-        val motsDeLaSemaine = semaine(Semaines.lundi(LocalDate.now()).toString())
-            ?.mots.orEmpty().filter { it.complet }.map { it.italien }
+        // Les vignettes sont tirées parmi les mots de la semaine (et, s'il en manque, de la semaine d'avant).
+        val lundi = Semaines.lundi(LocalDate.now())
+        val deLaSemaine = semaine(langue, lundi.toString())?.tous.orEmpty().map { it.traduction }
+        val deSecours = semaine(langue, lundi.minusWeeks(1).toString())?.tous.orEmpty().map { it.traduction }
+        val revisions = d.revisionsDe(langue).associateBy { it.mot }
         val seance = if (existante != null && !existante.terminee) {
-            SeanceItalien(
+            SeanceLangue(
+                langue = langue,
                 profil = profil,
                 soir = jour,
                 compte = true,
                 ordre = existante.ordre,
+                modes = existante.ordre.associateWith { modeDuMot(langue, it, revisions[it]) },
                 motsRevision = existante.revisions,
                 resultatsDeja = existante.resultats,
                 debutLe = existante.debutLe,
-                enregistrer = ::enregistrerProgressionItalien,
-                terminer = ::terminerItalien,
-                motsDeLaSemaine = motsDeLaSemaine,
+                enregistrer = ::enregistrerProgressionLangue,
+                terminer = ::terminerLangue,
+                motsDeLaSemaine = deLaSemaine,
+                motsDeSecours = deSecours,
             )
         } else {
-            val mots = if (existante != null) existante.ordre else motsDuSoirItalien(profil).map { it.code }
+            val mots = if (existante != null) {
+                existante.ordre.mapNotNull { MotLangue.lire(it, modeDuMot(langue, it, revisions[it])) }
+            } else {
+                motsDuSoir(langue, profil).shuffled()
+            }
             if (mots.isEmpty()) return
-            val duJour = motDuJourItalien()?.code
-            SeanceItalien(
+            val duJour = motsDuJour(langue).map { it.code }.toSet()
+            val ordre = mots.map { it.code }
+            SeanceLangue(
+                langue = langue,
                 profil = profil,
                 soir = jour,
                 compte = existante == null,
-                ordre = mots,
-                motsRevision = mots.filter { it != duJour },
+                ordre = ordre,
+                modes = mots.associate { it.code to it.mode },
+                motsRevision = ordre.filter { it !in duJour },
                 resultatsDeja = emptyList<ResultatMot>(),
                 debutLe = maintenant,
-                enregistrer = if (existante == null) ::enregistrerProgressionItalien else { _ -> },
-                terminer = if (existante == null) ::terminerItalien else { _ -> },
-                motsDeLaSemaine = motsDeLaSemaine,
-            ).also { if (existante == null) enregistrerProgressionItalien(it) }
+                enregistrer = if (existante == null) ::enregistrerProgressionLangue else { _ -> },
+                terminer = if (existante == null) ::terminerLangue else { _ -> },
+                motsDeLaSemaine = deLaSemaine,
+                motsDeSecours = deSecours,
+            ).also { if (existante == null) enregistrerProgressionLangue(it) }
         }
-        seanceItalien = seance
+        seanceLangue = seance
         sons
         messageEnfant = null
-        surveiller(profil, seance.compte, Seance.idSeance(seance.soir, Matiere.ITALIEN), Matiere.ITALIEN)
-        ecran = Ecran.Pigeon(profil.id)
+        surveiller(profil, seance.compte, Seance.idSeance(seance.soir, langue.matiere), langue.matiere)
+        ecran = Ecran.SeanceDeLangue(profil.id, langue)
     }
 
-    private fun enregistrerProgressionItalien(s: SeanceItalien) {
+    private fun enregistrerProgressionLangue(s: SeanceLangue) {
         depot.enregistrerSeance(s.profil.id, s.versSeance())
     }
 
-    /** Fin de la séance qui compte : mots qui reviendront demain, et peut-être la carte postale de la semaine. */
-    private fun terminerItalien(s: SeanceItalien) {
+    /** Fin de la séance qui compte : mots qui reviendront, compteurs, et peut-être la carte postale de la semaine. */
+    private fun terminerLangue(s: SeanceLangue) {
+        val langue = s.langue
         val d = donnees(s.profil.id)
-        val actuelles = d.revisionsItalien.associateBy { it.id }
+        val actuelles = d.revisionsDe(langue).associateBy { it.id }
         val aEcrire = ArrayList<Revision>()
         val aSupprimer = ArrayList<String>()
         for (r in s.resultats) {
             val cle = Mots.cle(r.mot)
             if (r.points < 1.0) {
-                aEcrire += Revision(cle, r.mot, 0, s.soir) // pas su du premier coup : il revient le lendemain
+                // Pas su du premier coup : il revient le lendemain, avec la même façon de répondre.
+                aEcrire += Revision(cle, r.mot, 0, s.soir, mode = s.modeDe(r.mot).cle)
             } else if (actuelles.containsKey(cle)) {
                 aSupprimer += cle // enfin su du premier coup : il ne revient plus
             }
         }
-        depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_ITALIEN, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
+        depot.terminerSeance(s.profil.id, s.versSeance(), langue.collectionRevisions, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
         compter(s.profil, s.versSeance())
 
-        // Les 5 mots de la semaine sus du premier coup : le pigeon apporte une carte postale,
-        // dès que le dernier d'entre eux a été fait (le vendredi, ou le week-end pour un soir rattrapé).
+        // Tous les mots de la semaine sus du premier coup : le messager apporte une carte postale,
+        // dès que le dernier d'entre eux a été fait (le dernier jour, ou plus tard pour un soir rattrapé).
         val lundi = Semaines.lundi(LocalDate.parse(s.soir)).toString()
-        val semaine = semaine(lundi) ?: return
-        if (d.cartesGagnees.any { it.semaine == lundi }) return
-        val seances = seancesItalienDeLaSemaine(d, lundi).filter { it.soir != s.soir } + s.versSeance()
-        if (!RecompenseItalien.semaineParfaite(semaine, seances)) return
-        val carte = RecompenseItalien.tirerCarte(toutesLesCartes, d.cartesGagnees) ?: return
+        val semaine = semaine(langue, lundi) ?: return
+        val cartes = d.cartesDe(langue)
+        if (cartes.any { it.semaine == lundi }) return
+        val seances = seancesDeLaSemaine(d, langue, lundi).filter { it.soir != s.soir } + s.versSeance()
+        if (!RecompenseLangue.semaineParfaite(semaine, seances)) return
+        val idCarte = tirerCarteDeLangue(langue, cartes) ?: return
         depot.enregistrerCarteGagnee(
             s.profil.id,
-            CarteGagnee(carte.id, lundi, System.currentTimeMillis(), epinglee = false, bienPlacee = false),
+            langue.collectionCartes,
+            CarteGagnee(idCarte, lundi, System.currentTimeMillis(), epinglee = false, bienPlacee = false),
         )
-        s.carteGagnee = carte
+        s.carteGagnee = idCarte
     }
 
-    fun quitterItalien() {
-        val id = seanceItalien?.profil?.id
-        fermerItalien(if (id != null) Ecran.AccueilEnfant(id) else Ecran.ChoixProfil)
+    /** Une carte de l'album de la langue que l'enfant n'a pas encore. */
+    private fun tirerCarteDeLangue(langue: Langue, gagnees: List<CarteGagnee>): String? = when (langue) {
+        Langue.ITALIEN -> RecompenseLangue.tirer(toutesLesCartes, { it.id }, gagnees)?.id
+        Langue.ANGLAIS -> null
     }
 
-    private fun fermerItalien(suite: Ecran) {
-        val s = seanceItalien ?: return
+    fun quitterLangue() {
+        val id = seanceLangue?.profil?.id
+        fermerLangue(if (id != null) Ecran.AccueilEnfant(id) else Ecran.ChoixProfil)
+    }
+
+    private fun fermerLangue(suite: Ecran) {
+        val s = seanceLangue ?: return
         arreterSurveillance()
         s.quitteLAppli()
-        seanceItalien = null
+        seanceLangue = null
         ecran = suite
     }
 
@@ -898,10 +949,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun remettreAZero(profil: Profil, seance: Seance) {
         val d = donnees(profil.id)
-        val plan = RemiseAZero.preparer(seance, d.cartesGagnees)
-        val collection = when (seance.matiere) {
-            Matiere.MATHS -> REVISIONS_MATHS
-            Matiere.ITALIEN -> REVISIONS_ITALIEN
+        val langue = Langue.depuisMatiere(seance.matiere)
+        val cartes = when {
+            langue != null -> d.cartesDe(langue)
+            seance.matiere == Matiere.FRANCAIS -> d.cartesFrance
+            else -> emptyList()
+        }
+        val plan = RemiseAZero.preparer(seance, cartes)
+        val collection = when {
+            langue != null -> langue.collectionRevisions
+            seance.matiere == Matiere.MATHS -> REVISIONS_MATHS
             else -> REVISIONS_FRANCAIS
         }
         val an = runCatching { Jours.anneeScolaire(LocalDate.parse(seance.soir)) }.getOrDefault(Jours.anneeScolaire())
@@ -940,13 +997,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         when (matiere) {
             Matiere.FRANCAIS -> seanceDictee = null
             Matiere.MATHS -> seanceCalcul = null
-            else -> seanceItalien = null
+            else -> seanceLangue = null
         }
         val e = ecran
-        if (e is Ecran.Dictee || e is Ecran.TriDesColis || e is Ecran.Pigeon) ecran = Ecran.AccueilEnfant(profil.id)
+        if (e is Ecran.Dictee || e is Ecran.TriDesColis || e is Ecran.SeanceDeLangue) ecran = Ecran.AccueilEnfant(profil.id)
         val nom = when (matiere) {
             Matiere.MATHS -> "maths"
             Matiere.ITALIEN -> "italien"
+            Matiere.ANGLAIS -> "anglais"
             else -> "français"
         }
         messageEnfant = profil.id to "Ta séance de $nom a été remise à zéro : tu peux la recommencer."
@@ -964,9 +1022,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Le parent offre une carte à un enfant (au hasard parmi celles qu'il n'a pas, ou une carte choisie). */
     fun offrirCarte(profil: Profil, carte: CartePostale?) {
-        val choisie = carte ?: RecompenseItalien.tirerCarte(toutesLesCartes, donnees(profil.id).cartesGagnees) ?: return
+        val choisie = carte ?: RecompenseLangue.tirer(toutesLesCartes, { it.id }, donnees(profil.id).cartesGagnees) ?: return
         depot.enregistrerCarteGagnee(
             profil.id,
+            CARTES_ITALIE,
             CarteGagnee(choisie.id, SEMAINE_OFFERTE, System.currentTimeMillis(), epinglee = false, bienPlacee = false),
         )
         messageParent = "La carte de ${choisie.ville} attend ${profil.prenom} sur son accueil."
@@ -978,13 +1037,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return toutesLesCartes.filter { it.id !in gagnees }
     }
 
-    /** Après la séance : le pigeon apporte la carte gagnée. */
+    /** Après la séance : le messager apporte la carte gagnée. */
     fun ouvrirCarteGagnee() {
-        val s = seanceItalien ?: return
+        val s = seanceLangue ?: return
         val carte = s.carteGagnee ?: return
         arreterSurveillance()
-        seanceItalien = null
-        ecran = Ecran.CartePostaleVue(s.profil.id, carte.id, nouvelle = true)
+        seanceLangue = null
+        ecran = when (s.langue) {
+            Langue.ITALIEN -> Ecran.CartePostaleVue(s.profil.id, carte, nouvelle = true)
+            Langue.ANGLAIS -> Ecran.AccueilEnfant(s.profil.id)
+        }
     }
 
     fun ouvrirCarte(profil: Profil, idCarte: String, nouvelle: Boolean) {
@@ -996,7 +1058,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun epingler(profil: Profil, idCarte: String, bienPlacee: Boolean) {
-        depot.marquerEpinglee(profil.id, idCarte, bienPlacee)
+        depot.marquerEpinglee(profil.id, CARTES_ITALIE, idCarte, bienPlacee)
     }
 
     fun ouvrirAlbum(profil: Profil) {
@@ -1038,16 +1100,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ecran = Ecran.AccueilEnfant(profil.id)
     }
 
-    // ---------- Italien : côté parent ----------
+    // ---------- Langues : côté parent ----------
 
-    fun ouvrirMotsItalien() {
+    fun ouvrirMotsLangue(langue: Langue) {
         messageParent = null
-        ecran = Ecran.MotsItalien
+        ecran = Ecran.MotsLangue(langue)
     }
 
-    fun enregistrerMotsItalien(lundi: String, mots: List<MotItalien>) {
-        depot.enregistrerSemaineItalien(SemaineItalien(lundi, mots))
-        messageParent = "Les mots d'italien de la semaine sont enregistrés."
+    fun enregistrerMotsLangue(langue: Langue, semaines: List<SemaineLangue>) {
+        for (s in semaines) depot.enregistrerSemaine(langue, s)
+        messageParent = "Les mots ${langue.deLaLangue} sont enregistrés."
         ecran = Ecran.EspaceParent
     }
 
@@ -1069,7 +1131,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Quitter l'appli pendant un mot ou un calcul : il compte 0.
         seanceDictee?.quitteLAppli()
         seanceCalcul?.quitteLAppli()
-        seanceItalien?.quitteLAppli()
+        seanceLangue?.quitteLAppli()
         _voix?.taire()
         _sons?.arreterMoteur()
     }
