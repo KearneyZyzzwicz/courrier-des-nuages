@@ -6,7 +6,8 @@ multiplication, mots d'italien et d'anglais. Chaque enfant a son profil, son ava
 - Le code de l'application est public ; les données de la famille sont dans une base privée,
   protégée par un compte familial. Aucune donnée personnelle n'est enregistrée dans ce dépôt.
 - Chaque modification envoyée sur `main` fabrique automatiquement une nouvelle version
-  (GitHub Actions) publiée dans les **Releases**. L'application se met à jour toute seule.
+  (GitHub Actions) publiée dans les **Releases**. L'application prévient quand une nouvelle version
+  est disponible et ouvre son téléchargement dans le navigateur ; elle n'installe rien elle-même.
 
 ## Installer sur un téléphone
 
