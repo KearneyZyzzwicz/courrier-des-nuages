@@ -225,6 +225,7 @@ class Depot {
             resultats = resultats,
             debutLe = doc.getLong("debutLe") ?: 0L,
             finLe = doc.getLong("finLe") ?: 0L,
+            medailleEnregistree = if (doc.getString("etat") == EtatSeance.TERMINEE) Medaille.depuisCle(doc.getString("medaille")) else null,
             revisionsAvant = (doc.get("revisionsAvant") as? List<*>)?.mapNotNull { element ->
                 val m = element as? Map<*, *> ?: return@mapNotNull null
                 val cle = m["cle"] as? String ?: return@mapNotNull null
@@ -324,6 +325,7 @@ class Depot {
             when (retrait.medaille) {
                 Medaille.OR -> champs["annees.$an.$m.or"] = FieldValue.increment(-1L)
                 Medaille.ARGENT -> champs["annees.$an.$m.argent"] = FieldValue.increment(-1L)
+                Medaille.BRONZE -> champs["annees.$an.$m.bronze"] = FieldValue.increment(-1L)
                 Medaille.AUCUNE -> Unit
             }
             lot.update(ref, champs)
@@ -488,6 +490,7 @@ class Depot {
                 r[matiere] = MedaillesGagnees(
                     or = avant.or + ((x["or"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
                     argent = avant.argent + ((x["argent"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
+                    bronze = avant.bronze + ((x["bronze"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
                 )
             }
         }
@@ -504,6 +507,7 @@ class Depot {
                 possibles = ((x["possibles"] as? Number)?.toDouble() ?: 0.0).coerceAtLeast(0.0),
                 or = ((x["or"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
                 argent = ((x["argent"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
+                bronze = ((x["bronze"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
             )
         }
         return StatsAnnee(
@@ -527,6 +531,8 @@ class Depot {
             champs["annees.$an.$matiere.possibles"] = FieldValue.increment(a.possibles)
             val or = ajouts.count { it.matiere == matiere && it.medaille == Medaille.OR }
             val argent = ajouts.count { it.matiere == matiere && it.medaille == Medaille.ARGENT }
+            val bronze = ajouts.count { it.matiere == matiere && it.medaille == Medaille.BRONZE }
+            if (bronze > 0) champs["annees.$an.$matiere.bronze"] = FieldValue.increment(bronze.toLong())
             if (or > 0) champs["annees.$an.$matiere.or"] = FieldValue.increment(or.toLong())
             if (argent > 0) champs["annees.$an.$matiere.argent"] = FieldValue.increment(argent.toLong())
             livraisons += a.livraisons
@@ -537,7 +543,8 @@ class Depot {
 
     /** Remplace les compteurs de l'année par ceux recalculés à partir des séances et des soirs. */
     fun ecrireStats(idProfil: String, an: String, stats: StatsAnnee) {
-        fun matiere(m: StatsMatiere) = mapOf("points" to m.points, "possibles" to m.possibles, "or" to m.or, "argent" to m.argent)
+        fun matiere(m: StatsMatiere) =
+            mapOf("points" to m.points, "possibles" to m.possibles, "or" to m.or, "argent" to m.argent, "bronze" to m.bronze)
         profilRef(idProfil).update(
             mapOf(
                 "annees.$an" to mapOf(

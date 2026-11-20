@@ -276,12 +276,12 @@ private fun CarteAnnee(vm: AppViewModel, profil: Profil) {
                         )
                     }
                 }
-                if (m.cle != Matiere.ITALIEN) {
-                    DessinMedaille(Medaille.OR, Modifier.size(24.dp))
-                    Text("${stats.or}", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.width(4.dp))
-                    DessinMedaille(Medaille.ARGENT, Modifier.size(24.dp))
-                    Text("${stats.argent}", style = MaterialTheme.typography.bodyMedium)
+                if (m.medailles) {
+                    for ((medaille, nombre) in listOf(Medaille.OR to stats.or, Medaille.ARGENT to stats.argent, Medaille.BRONZE to stats.bronze)) {
+                        DessinMedaille(medaille, Modifier.size(22.dp))
+                        Text("$nombre", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.width(3.dp))
+                    }
                 }
             }
         }

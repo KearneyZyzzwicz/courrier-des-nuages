@@ -26,8 +26,12 @@ object Mots {
         .trim()
         .replace(espaces, " ")
 
-    /** La règle de la dictée : identique au mot enregistré, accents, majuscules et déterminant compris. */
-    fun identiques(saisie: String, attendu: String): Boolean = normaliser(saisie) == normaliser(attendu)
+    /**
+     * La règle de la dictée (et des langues) : identique au mot enregistré, accents et déterminant
+     * compris. Les majuscules et les minuscules ne comptent pas (demandé par le parent le 20 novembre).
+     */
+    fun identiques(saisie: String, attendu: String): Boolean =
+        normaliser(saisie).lowercase(Locale.FRENCH) == normaliser(attendu).lowercase(Locale.FRENCH)
 
     /** Identifiant de document pour un mot (la base n'accepte pas tous les caractères). */
     fun cle(mot: String): String {
@@ -48,10 +52,10 @@ object Mots {
         return essai
     }
 
-    /** Sans doublons (en comparant les formes normalisées), dans l'ordre d'arrivée. */
+    /** Sans doublons (en comparant les formes normalisées, sans tenir compte des majuscules), dans l'ordre d'arrivée. */
     fun sansDoublons(mots: List<String>): List<String> {
         val vus = HashSet<String>()
-        return mots.map { normaliser(it) }.filter { it.isNotEmpty() && vus.add(it) }
+        return mots.map { normaliser(it) }.filter { it.isNotEmpty() && vus.add(it.lowercase(Locale.FRENCH)) }
     }
 
     /**

@@ -73,6 +73,7 @@ object Classement {
                 possibles = m.possibles + a.possibles,
                 or = m.or + if (a.medaille == Medaille.OR) 1 else 0,
                 argent = m.argent + if (a.medaille == Medaille.ARGENT) 1 else 0,
+                bronze = m.bronze + if (a.medaille == Medaille.BRONZE) 1 else 0,
             )
             r = when (a.matiere) {
                 Matiere.MATHS -> r.copy(maths = nouveau)

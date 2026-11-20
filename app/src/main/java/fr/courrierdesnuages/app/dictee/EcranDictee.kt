@@ -469,11 +469,8 @@ private fun ResumeDictee(seance: SeanceDictee, onRetour: () -> Unit) {
                 color = Encre,
             )
             Text(
-                when (medaille) {
-                    Medaille.OR -> "Médaille d'or : aucune faute !"
-                    Medaille.ARGENT -> "Médaille d'argent : une seule faute."
-                    Medaille.AUCUNE -> "Les mots ratés reviendront les jours suivants."
-                },
+                texteMedaille(medaille, seance.ordre.size - seance.points)
+                    ?: "Les mots ratés reviendront les jours suivants.",
                 style = MaterialTheme.typography.titleMedium,
                 color = EncreDouce,
                 textAlign = TextAlign.Center,
@@ -523,11 +520,28 @@ private fun ResumeDictee(seance: SeanceDictee, onRetour: () -> Unit) {
     }
 }
 
-/** Une médaille dessinée : ruban rouge, disque d'or ou d'argent, étoile au centre. */
+/** Ce qui est écrit sous la médaille, selon les points qui manquent ; null sans médaille. */
+fun texteMedaille(medaille: Medaille, manque: Double): String? = when (medaille) {
+    Medaille.OR -> "Médaille d'or : tous les points !"
+    Medaille.ARGENT -> "Médaille d'argent : il ne manque que ${manqueEnTexte(manque)}."
+    Medaille.BRONZE -> "Médaille de bronze : il ne manque que ${manqueEnTexte(manque)}."
+    Medaille.AUCUNE -> null
+}
+
+/** 0,5 → « un demi-point », 1 → « un point », 1,5 → « un point et demi », 2 → « deux points ». */
+fun manqueEnTexte(manque: Double): String = when {
+    manque <= 0.5 -> "un demi-point"
+    manque <= 1.0 -> "un point"
+    manque <= 1.5 -> "un point et demi"
+    else -> "deux points"
+}
+
+/** Une médaille dessinée : ruban rouge, disque d'or, d'argent ou de bronze, étoile au centre. */
 @Composable
 fun DessinMedaille(medaille: Medaille, modifier: Modifier = Modifier) {
     val (clair, fonce) = when (medaille) {
         Medaille.OR -> Color(0xFFF7D774) to Color(0xFFD9A41E)
+        Medaille.BRONZE -> Color(0xFFEDB27C) to Color(0xFFB0642A)
         else -> Color(0xFFE6EBF2) to Color(0xFFA9B4C4)
     }
     Canvas(modifier) {
