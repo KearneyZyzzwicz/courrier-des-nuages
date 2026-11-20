@@ -1,10 +1,9 @@
 package fr.courrierdesnuages.app.maj
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings
-import androidx.core.content.FileProvider
 import fr.courrierdesnuages.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,11 +15,20 @@ import java.net.URL
 
 data class NouvelleVersion(val numero: Int, val nom: String, val adresse: String, val taille: Long)
 
-/** Les nouvelles versions sont publiées sur GitHub ; l'appli les cherche et les installe. */
+/**
+ * Les nouvelles versions sont publiées sur GitHub. L'appli les cherche, puis ouvre leur
+ * téléchargement dans le navigateur : c'est Android qui installe le fichier téléchargé.
+ * L'appli n'installe rien elle-même (depuis la 1.39) : Google Play Protect se méfie des applis
+ * qui ont l'autorisation d'installer d'autres applis.
+ */
 object MiseAJour {
     private const val ADRESSE_API =
         "https://api.github.com/repos/KearneyZyzzwicz/courrier-des-nuages/releases/latest"
     private const val NOM_FICHIER = "courrier-des-nuages.apk"
+
+    /** La dernière version publiée, toujours à cette adresse. */
+    private const val ADRESSE_DERNIERE =
+        "https://github.com/KearneyZyzzwicz/courrier-des-nuages/releases/latest/download/$NOM_FICHIER"
 
     /** Renvoie la nouvelle version si elle est plus récente que celle installée, sinon null. */
     suspend fun chercher(): NouvelleVersion? = withContext(Dispatchers.IO) {
@@ -57,61 +65,20 @@ object MiseAJour {
         }
     }
 
-    suspend fun telecharger(
-        contexte: Context,
-        version: NouvelleVersion,
-        progression: (Float) -> Unit,
-    ): File = withContext(Dispatchers.IO) {
-        val dossier = File(contexte.cacheDir, "maj")
-        dossier.mkdirs()
-        dossier.listFiles()?.forEach { it.delete() }
-        val fichier = File(dossier, NOM_FICHIER)
-        // GitHub renvoie vers un autre serveur (toujours en https) : la redirection est suivie.
-        val connexion = URL(version.adresse).openConnection() as HttpURLConnection
-        try {
-            connexion.instanceFollowRedirects = true
-            connexion.connectTimeout = 15_000
-            connexion.readTimeout = 30_000
-            connexion.setRequestProperty("User-Agent", "CourrierDesNuages")
-            val code = connexion.responseCode
-            if (code != 200) throw IOException("Téléchargement impossible ($code)")
-            val total = connexion.contentLengthLong.takeIf { it > 0 } ?: version.taille
-            connexion.inputStream.use { entree ->
-                fichier.outputStream().use { sortie ->
-                    val tampon = ByteArray(64 * 1024)
-                    var lu = 0L
-                    while (true) {
-                        val n = entree.read(tampon)
-                        if (n < 0) break
-                        sortie.write(tampon, 0, n)
-                        lu += n
-                        if (total > 0) progression((lu.toFloat() / total).coerceIn(0f, 1f))
-                    }
-                }
-            }
-        } finally {
-            connexion.disconnect()
+    /** Ouvre le téléchargement dans le navigateur ; faux s'il n'y a aucun navigateur. */
+    fun ouvrirTelechargement(contexte: Context, version: NouvelleVersion?): Boolean {
+        val adresse = version?.adresse?.takeIf { it.startsWith("https://github.com/") } ?: ADRESSE_DERNIERE
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(adresse)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            contexte.startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
         }
-        fichier
     }
 
-    fun peutInstaller(contexte: Context): Boolean =
-        contexte.packageManager.canRequestPackageInstalls()
-
-    /** Ouvre le réglage Android « Installer des applis inconnues » pour cette appli. */
-    fun demanderAutorisation(contexte: Context) {
-        val intent = Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:${contexte.packageName}"),
-        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        contexte.startActivity(intent)
-    }
-
-    fun installer(contexte: Context, fichier: File) {
-        val uri = FileProvider.getUriForFile(contexte, "${contexte.packageName}.fichiers", fichier)
-        val intent = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, "application/vnd.android.package-archive")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        contexte.startActivity(intent)
+    /** Efface l'ancien fichier téléchargé par les versions d'avant la 1.39 (environ 35 Mo). */
+    fun nettoyer(contexte: Context) {
+        runCatching { File(contexte.cacheDir, "maj").deleteRecursively() }
     }
 }

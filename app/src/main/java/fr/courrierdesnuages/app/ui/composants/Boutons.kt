@@ -21,7 +21,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -29,7 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -158,7 +156,6 @@ fun Pastille(texte: String, choisie: Boolean, onClick: () -> Unit, modifier: Mod
 @Composable
 fun BanniereMiseAJour(vm: AppViewModel, modifier: Modifier = Modifier) {
     val version = vm.nouvelleVersion ?: return
-    val progression = vm.progressionMaj
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -168,31 +165,19 @@ fun BanniereMiseAJour(vm: AppViewModel, modifier: Modifier = Modifier) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Text("Nouvelle version ${version.nom} disponible", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Le navigateur télécharge le fichier : ouvre-le ensuite pour installer la mise à jour.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = EncreDouce,
+            )
             Spacer(Modifier.height(10.dp))
-            if (progression != null) {
-                LinearProgressIndicator(
-                    progress = { progression },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(5.dp)),
-                    color = Encre,
-                    trackColor = Color.White,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Téléchargement… ${(progression * 100).toInt()} %",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = EncreDouce,
-                )
-            } else {
-                BoutonPrincipal(
-                    texte = "Installer",
-                    onClick = { vm.installerMiseAJour() },
-                    couleur = Encre,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            BoutonPrincipal(
+                texte = "Télécharger la mise à jour",
+                onClick = { vm.telechargerMiseAJour() },
+                couleur = Encre,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

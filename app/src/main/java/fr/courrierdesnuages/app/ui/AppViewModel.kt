@@ -60,7 +60,6 @@ import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.son.Voix
 import fr.courrierdesnuages.app.suivi.Classement
 import fr.courrierdesnuages.app.suivi.RemiseAZero
-import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -181,8 +180,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Mises à jour
     var nouvelleVersion by mutableStateOf<NouvelleVersion?>(null)
         private set
-    var progressionMaj by mutableStateOf<Float?>(null)
-        private set
     var messageMaj by mutableStateOf<String?>(null)
         private set
 
@@ -197,9 +194,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val recalculsLances = HashSet<String>()
     private var momentArrierePlan = 0L
     private var activiteExterne = false
-    private var fichierMaj: File? = null
     private var dernierControleMaj = 0L
-    private var attenteAutorisation = false
 
     private var _voix: Voix? = null
     private var _sons: Sons? = null
@@ -213,6 +208,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         if (Compte.estRelie) demarrerEcoute()
+        MiseAJour.nettoyer(application)
         verifierMiseAJour(silencieux = true)
     }
 
@@ -1261,13 +1257,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         recalculerSiBesoin()
         // L'appli reste souvent ouverte en arrière-plan : on regarde s'il y a une nouvelle version
         // en revenant dessus (au plus une fois toutes les 10 minutes).
-        if (progressionMaj == null && SystemClock.elapsedRealtime() - dernierControleMaj > 10 * 60_000L) {
+        if (SystemClock.elapsedRealtime() - dernierControleMaj > 10 * 60_000L) {
             verifierMiseAJour(silencieux = true)
-        }
-        if (attenteAutorisation && MiseAJour.peutInstaller(getApplication<Application>())) {
-            attenteAutorisation = false
-            messageMaj = null
-            lancerInstallation()
         }
     }
 
@@ -1292,35 +1283,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun installerMiseAJour() {
-        val version = nouvelleVersion ?: return
-        if (progressionMaj != null) return
-        val contexte = getApplication<Application>()
-        viewModelScope.launch {
-            progressionMaj = 0f
-            messageMaj = null
-            try {
-                fichierMaj = MiseAJour.telecharger(contexte, version) { p -> progressionMaj = p }
-                progressionMaj = null
-                lancerInstallation()
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                messageMaj = "Le téléchargement a échoué. Réessaie avec une bonne connexion."
-            } finally {
-                progressionMaj = null
-            }
-        }
-    }
-
-    private fun lancerInstallation() {
-        val contexte = getApplication<Application>()
-        val fichier = fichierMaj ?: return
-        if (MiseAJour.peutInstaller(contexte)) {
-            MiseAJour.installer(contexte, fichier)
+    /**
+     * Ouvre le téléchargement de la nouvelle version dans le navigateur. Android l'installe quand on
+     * ouvre le fichier téléchargé (la première fois, il demande d'autoriser le navigateur).
+     */
+    fun telechargerMiseAJour() {
+        val ok = MiseAJour.ouvrirTelechargement(getApplication(), nouvelleVersion)
+        messageMaj = if (ok) {
+            "Le navigateur télécharge la nouvelle version : ouvre ensuite le fichier téléchargé pour l'installer."
         } else {
-            attenteAutorisation = true
-            messageMaj = "Autorise « Courrier des Nuages » à installer des applis, puis reviens ici."
-            MiseAJour.demanderAutorisation(contexte)
+            "Aucun navigateur n'est installé sur ce téléphone pour télécharger la mise à jour."
         }
     }
 
