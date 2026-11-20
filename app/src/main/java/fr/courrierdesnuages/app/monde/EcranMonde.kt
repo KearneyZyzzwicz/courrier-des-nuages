@@ -352,5 +352,6 @@ fun EcranAlbumMonde(vm: AppViewModel, profil: Profil) {
         onOuvrir = { l -> vm.ouvrirCarteMonde(profil, l.id, nouvelle = false) },
         onPlacer = { l -> vm.ouvrirEpingleMonde(profil, l.id) },
         onRetour = { vm.retour() },
+        credit = "Carte du monde : Natural Earth (domaine public).",
     )
 }

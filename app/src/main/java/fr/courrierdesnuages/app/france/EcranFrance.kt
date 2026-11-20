@@ -368,5 +368,6 @@ fun EcranAlbumFrance(vm: AppViewModel, profil: Profil) {
         onPlacer = { l -> vm.ouvrirEpingleDepartement(profil, l.id) },
         onRetour = { vm.retour() },
         etiquettes = gagnees.filter { it.second.epinglee }.associate { it.first.code to it.first.code },
+        credit = "Carte des départements : IGN, Admin Express 2018 (Licence ouverte Etalab), via france-geojson.",
     )
 }

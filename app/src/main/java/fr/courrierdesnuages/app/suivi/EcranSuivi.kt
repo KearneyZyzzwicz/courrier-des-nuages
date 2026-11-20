@@ -42,7 +42,10 @@ import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
 import fr.courrierdesnuages.app.france.DEPARTEMENTS
 import fr.courrierdesnuages.app.france.departement
+import fr.courrierdesnuages.app.hangar.ENGINS
+import fr.courrierdesnuages.app.hangar.Hangar
 import fr.courrierdesnuages.app.hangar.enginDuFacteur
+import fr.courrierdesnuages.app.hangar.piecesDuHangar
 import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.langues.Langue
 import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
@@ -81,6 +84,7 @@ fun EcranSuivi(vm: AppViewModel, profil: Profil) {
             item { CarteAujourdhui(vm, profil, d) }
             item { CarteAnnee(vm, profil) }
             item { CartePlusRates(seances, complet = annee != null) }
+            item { CarteHangar(profil) }
             item {
                 CarteAlbum(
                     titre = "Album de France",
@@ -358,6 +362,21 @@ private fun CartePlusRates(seances: List<Seance>, complet: Boolean) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CarteHangar(profil: Profil) {
+    Carte(Modifier.fillMaxWidth()) {
+        val pieces = profil.piecesDuHangar
+        val construits = Hangar.construits(pieces).size
+        Text("Hangar des engins : $construits sur ${ENGINS.size}", style = MaterialTheme.typography.titleLarge)
+        Text(
+            "$pieces médaille${if (pieces > 1) "s" else ""} d'or en maths, une pièce chacune ; 5 pièces font un engin." +
+                (profil.enginDuFacteur?.let { " Engin choisi : ${it.nom.replaceFirstChar { c -> c.lowercase() }}." } ?: ""),
+            style = MaterialTheme.typography.bodyMedium,
+            color = EncreDouce,
+        )
     }
 }
 

@@ -1,7 +1,7 @@
 # Le Courrier des Nuages
 
 Application Android d'aide aux devoirs pour une famille : dictée de mots, tables d'addition et de
-multiplication, mots d'italien. Chaque enfant a son profil, son avatar et son code secret.
+multiplication, mots d'italien et d'anglais. Chaque enfant a son profil, son avatar et son code secret.
 
 - Le code de l'application est public ; les données de la famille sont dans une base privée,
   protégée par un compte familial. Aucune donnée personnelle n'est enregistrée dans ce dépôt.
@@ -19,6 +19,11 @@ multiplication, mots d'italien. Chaque enfant a son profil, son avatar et son co
 
 - Polices [Fredoka](https://fonts.google.com/specimen/Fredoka) et [Andika](https://software.sil.org/andika/)
   (SIL Open Font License, voir `app/src/main/assets/licences`).
-- Illustrations (avatars, pigeon, avion, cartes postales) créées pour le projet.
+- Illustrations (avatars, pigeon, albatros, avion, cartes postales, engins du hangar) créées pour le projet.
 - Carte de l'Italie : limites des régions de l'[ISTAT](https://www.istat.it/) (licence CC BY),
   via [openpolis/geojson-italy](https://github.com/openpolis/geojson-italy), simplifiées pour l'appli.
+- Carte des départements de France : IGN, Admin Express COG 2018 (Licence ouverte Etalab), via
+  [gregoiredavid/france-geojson](https://github.com/gregoiredavid/france-geojson), simplifiée pour l'appli
+  (`app/src/main/res/raw/departements.txt`).
+- Carte du monde : [Natural Earth](https://www.naturalearthdata.com/) (domaine public), pays au 1:50 m,
+  simplifiée pour l'appli (`app/src/main/res/raw/pays.txt`).
