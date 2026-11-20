@@ -32,6 +32,7 @@ import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.MedaillesGagnees
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.dictee.DessinMedaille
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
 import fr.courrierdesnuages.app.langues.Langue
 import fr.courrierdesnuages.app.langues.couleurDe
 import fr.courrierdesnuages.app.ui.AppViewModel
@@ -178,7 +179,7 @@ private fun LignePlace(place: Classement.Place<Profil>, matiere: MatiereAffichee
                 )
             }
             Spacer(Modifier.width(8.dp))
-            ImageAvatar(p.avatar, taille = 44.dp)
+            ImageAvatar(p.avatar, taille = 44.dp, engin = p.enginDuFacteur)
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(

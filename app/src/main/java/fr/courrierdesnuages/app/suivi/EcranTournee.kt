@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.AvatarAnime
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -203,6 +204,7 @@ private fun CarteDesIles(profil: Profil, livraisons: Long, modifier: Modifier = 
                 AvatarAnime(
                     avatar = profil.avatar,
                     taille = tailleAvatar,
+                    engin = profil.enginDuFacteur,
                     modifier = Modifier.offset {
                         IntOffset(
                             (position.x - tailleAvatarPx / 2f).roundToInt(),

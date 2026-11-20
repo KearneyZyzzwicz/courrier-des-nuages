@@ -40,7 +40,16 @@ import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
+import fr.courrierdesnuages.app.france.DEPARTEMENTS
+import fr.courrierdesnuages.app.france.departement
+import fr.courrierdesnuages.app.hangar.ENGINS
+import fr.courrierdesnuages.app.hangar.Hangar
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
+import fr.courrierdesnuages.app.hangar.piecesDuHangar
+import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.langues.Langue
+import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
+import fr.courrierdesnuages.app.monde.carteMonde
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.SEMAINE_OFFERTE
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -75,7 +84,34 @@ fun EcranSuivi(vm: AppViewModel, profil: Profil) {
             item { CarteAujourdhui(vm, profil, d) }
             item { CarteAnnee(vm, profil) }
             item { CartePlusRates(seances, complet = annee != null) }
-            item { CarteCartesPostales(vm, d) }
+            item { CarteHangar(profil) }
+            item {
+                CarteAlbum(
+                    titre = "Album de France",
+                    sur = DEPARTEMENTS.size,
+                    vide = "Une dictée avec tous les points rapporte la carte d'un département.",
+                    cartes = d.cartesFrance,
+                    nom = { code -> departement(code)?.let { "${it.code} · ${it.nom} (${it.ville})" } },
+                )
+            }
+            item {
+                CarteAlbum(
+                    titre = "Tour du monde",
+                    sur = TOUR_DU_MONDE.size,
+                    vide = "Une semaine d'anglais sans faute rapporte une carte.",
+                    cartes = d.cartesMonde,
+                    nom = { id -> carteMonde(id)?.let { "${it.ville} (${it.nomPays})" } },
+                )
+            }
+            item {
+                CarteAlbum(
+                    titre = "Album d'Italie",
+                    sur = vm.toutesLesCartes.size,
+                    vide = "Une semaine d'italien sans faute rapporte une carte.",
+                    cartes = d.cartesGagnees,
+                    nom = { id -> vm.carte(id)?.ville },
+                )
+            }
             item {
                 Text("Jour par jour", style = MaterialTheme.typography.titleLarge, color = Encre)
                 if (annee == null) {
@@ -114,7 +150,7 @@ private fun fusionSoirs(annee: List<Soir>?, recents: List<Soir>): List<Soir> {
 private fun CarteAujourdhui(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
     Carte(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ImageAvatar(profil.avatar, taille = 56.dp)
+            ImageAvatar(profil.avatar, taille = 56.dp, engin = profil.enginDuFacteur)
             Spacer(Modifier.width(12.dp))
             Column {
                 Text("Aujourd'hui", style = MaterialTheme.typography.titleLarge)
@@ -330,30 +366,34 @@ private fun CartePlusRates(seances: List<Seance>, complet: Boolean) {
 }
 
 @Composable
-private fun CarteCartesPostales(vm: AppViewModel, d: DonneesEnfant) {
+private fun CarteHangar(profil: Profil) {
     Carte(Modifier.fillMaxWidth()) {
-        val cartes = d.cartesGagnees.sortedByDescending { it.gagneeLe }
+        val pieces = profil.piecesDuHangar
+        val construits = Hangar.construits(pieces).size
+        Text("Hangar des engins : $construits sur ${ENGINS.size}", style = MaterialTheme.typography.titleLarge)
         Text(
-            when (cartes.size) {
-                0 -> "Cartes postales"
-                1 -> "1 carte postale gagnée"
-                else -> "${cartes.size} cartes postales gagnées"
-            },
-            style = MaterialTheme.typography.titleLarge,
+            "$pieces médaille${if (pieces > 1) "s" else ""} d'or en maths, une pièce chacune ; 5 pièces font un engin." +
+                (profil.enginDuFacteur?.let { " Engin choisi : ${it.nom.replaceFirstChar { c -> c.lowercase() }}." } ?: ""),
+            style = MaterialTheme.typography.bodyMedium,
+            color = EncreDouce,
         )
+    }
+}
+
+@Composable
+private fun CarteAlbum(titre: String, sur: Int, vide: String, cartes: List<CarteGagnee>, nom: (String) -> String?) {
+    Carte(Modifier.fillMaxWidth()) {
+        var tout by remember { mutableStateOf(false) }
+        val triees = cartes.sortedByDescending { it.gagneeLe }
+        Text("$titre : ${cartes.size} sur $sur", style = MaterialTheme.typography.titleLarge)
         if (cartes.isEmpty()) {
-            Text(
-                "Une semaine d'italien sans faute rapporte une carte.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = EncreDouce,
-            )
+            Text(vide, style = MaterialTheme.typography.bodyMedium, color = EncreDouce)
         }
-        for (c in cartes) {
-            val carte = vm.carte(c.idCarte)
+        for (c in if (tout) triees else triees.take(5)) {
             val jour = Instant.ofEpochMilli(c.gagneeLe).atZone(ZoneId.systemDefault()).toLocalDate().toString()
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(carte?.ville ?: "Carte retirée", style = MaterialTheme.typography.bodyMedium)
+                    Text(nom(c.idCarte) ?: "Carte retirée", style = MaterialTheme.typography.bodyMedium)
                     Text(
                         Jours.enClair(jour) + if (c.semaine == SEMAINE_OFFERTE) " · offerte" else "",
                         style = MaterialTheme.typography.bodySmall,
@@ -374,6 +414,9 @@ private fun CarteCartesPostales(vm: AppViewModel, d: DonneesEnfant) {
                     },
                 )
             }
+        }
+        if (!tout && triees.size > 5) {
+            TextButton(onClick = { tout = true }) { Text("Voir les ${triees.size} cartes") }
         }
     }
 }

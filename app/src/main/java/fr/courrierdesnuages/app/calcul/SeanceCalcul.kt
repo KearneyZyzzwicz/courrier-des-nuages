@@ -10,6 +10,7 @@ import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.data.ResultatMot
 import fr.courrierdesnuages.app.data.Seance
+import fr.courrierdesnuages.app.hangar.NouvellePiece
 
 /** Les étapes d'un calcul : le colis avance, seconde chance aux 4 casiers, recopie. */
 enum class EtapeCalcul { TAPIS, CASIERS, RECOPIE, BRAVO, FIN }
@@ -56,6 +57,9 @@ class SeanceCalcul(
         private set
     var dernierPoint by mutableStateOf(0.0)
         private set
+
+    /** La pièce du hangar rapportée par cette séance (séance qui compte, tous les points). */
+    var nouvellePiece by mutableStateOf<NouvellePiece?>(null)
 
     /** Change à chaque nouveau colis : relance le tapis roulant. */
     var passage by mutableStateOf(0)

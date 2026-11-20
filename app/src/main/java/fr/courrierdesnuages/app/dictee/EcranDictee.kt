@@ -89,6 +89,7 @@ fun EcranDictee(
     sons: Sons,
     voix: Voix,
     onQuitter: () -> Unit,
+    onOuvrirCarte: () -> Unit = {},
 ) {
     var confirmerArret by remember { mutableStateOf(false) }
     val enCours = seance.phase != Phase.FIN
@@ -108,7 +109,7 @@ fun EcranDictee(
             onArreter = { if (enCours) confirmerArret = true else onQuitter() },
         )
         if (!enCours) {
-            ResumeDictee(seance, onRetour = onQuitter)
+            ResumeDictee(seance, onRetour = onQuitter, onOuvrirCarte = onOuvrirCarte)
         } else {
             DeroulementMot(seance, sons, voix)
         }
@@ -448,7 +449,7 @@ private fun TuilesSecondeChance(seance: SeanceDictee) {
 // ---------- Fin de séance ----------
 
 @Composable
-private fun ResumeDictee(seance: SeanceDictee, onRetour: () -> Unit) {
+private fun ResumeDictee(seance: SeanceDictee, onRetour: () -> Unit, onOuvrirCarte: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
@@ -484,6 +485,21 @@ private fun ResumeDictee(seance: SeanceDictee, onRetour: () -> Unit) {
                 color = EncreDouce,
                 textAlign = TextAlign.Center,
             )
+        }
+        val carte = seance.carteGagnee
+        if (carte != null) {
+            Spacer(Modifier.height(16.dp))
+            Carte(Modifier.fillMaxWidth()) {
+                Text(
+                    "Tous les points ! Le Petit Avion t'apporte la carte d'un département de France.",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Encre,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                BoutonPrincipal(texte = "Ouvrir la carte", onClick = onOuvrirCarte, modifier = Modifier.fillMaxWidth())
+            }
         }
         Spacer(Modifier.height(16.dp))
         Carte(Modifier.fillMaxWidth()) {

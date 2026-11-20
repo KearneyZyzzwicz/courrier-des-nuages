@@ -17,7 +17,11 @@ import com.google.firebase.firestore.ListenerRegistration
 import fr.courrierdesnuages.app.BuildConfig
 import fr.courrierdesnuages.app.calcul.Calcul
 import fr.courrierdesnuages.app.calcul.SeanceCalcul
+import fr.courrierdesnuages.app.cartes.Atlases
 import fr.courrierdesnuages.app.data.Avatar
+import fr.courrierdesnuages.app.data.CARTES_FRANCE
+import fr.courrierdesnuages.app.data.CARTES_ITALIE
+import fr.courrierdesnuages.app.data.CARTES_MONDE
 import fr.courrierdesnuages.app.data.CodeParent
 import fr.courrierdesnuages.app.data.Codes
 import fr.courrierdesnuages.app.data.Compte
@@ -25,9 +29,9 @@ import fr.courrierdesnuages.app.data.Depot
 import fr.courrierdesnuages.app.data.DonneesEnfant
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
+import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
-import fr.courrierdesnuages.app.data.CARTES_ITALIE
 import fr.courrierdesnuages.app.data.REVISIONS_FRANCAIS
 import fr.courrierdesnuages.app.data.REVISIONS_MATHS
 import fr.courrierdesnuages.app.data.ResultatMot
@@ -35,6 +39,9 @@ import fr.courrierdesnuages.app.data.Revision
 import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.dictee.SeanceDictee
+import fr.courrierdesnuages.app.france.DEPARTEMENTS
+import fr.courrierdesnuages.app.hangar.Hangar
+import fr.courrierdesnuages.app.hangar.piecesDuHangar
 import fr.courrierdesnuages.app.italien.CARTES_INTEGREES
 import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.italien.CartePostale
@@ -48,15 +55,17 @@ import fr.courrierdesnuages.app.langues.SeanceLangue
 import fr.courrierdesnuages.app.langues.SemaineLangue
 import fr.courrierdesnuages.app.maj.MiseAJour
 import fr.courrierdesnuages.app.maj.NouvelleVersion
+import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.son.Voix
 import fr.courrierdesnuages.app.suivi.Classement
 import fr.courrierdesnuages.app.suivi.RemiseAZero
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /** Les écrans de l'appli. Les profils sont désignés par leur identifiant. */
 sealed interface Ecran {
@@ -76,6 +85,13 @@ sealed interface Ecran {
     data class CartePostaleVue(val idProfil: String, val idCarte: String, val nouvelle: Boolean) : Ecran
     data class Epingler(val idProfil: String, val idCarte: String) : Ecran
     data class Album(val idProfil: String) : Ecran
+    data class CarteDepartement(val idProfil: String, val code: String, val nouvelle: Boolean) : Ecran
+    data class EpinglerDepartement(val idProfil: String, val code: String) : Ecran
+    data class AlbumFrance(val idProfil: String) : Ecran
+    data class CarteMondeVue(val idProfil: String, val id: String, val nouvelle: Boolean) : Ecran
+    data class EpinglerMonde(val idProfil: String, val id: String) : Ecran
+    data class AlbumMonde(val idProfil: String) : Ecran
+    data class VoirHangar(val idProfil: String) : Ecran
     data class MotsLangue(val langue: Langue) : Ecran
     data object NouvelleCarte : Ecran
     data class VoirClassement(val idProfil: String) : Ecran
@@ -306,6 +322,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CartePostaleVue -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Epingler -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Album -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.CarteDepartement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.EpinglerDepartement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.AlbumFrance -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.CarteMondeVue -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.EpinglerMonde -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.AlbumMonde -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.VoirHangar -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.VoirClassement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Tournee -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Suivi -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
@@ -423,6 +446,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CartePostaleVue -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.Album(e.idProfil)
             is Ecran.Epingler -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Album -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.CarteDepartement -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.AlbumFrance(e.idProfil)
+            is Ecran.EpinglerDepartement -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.AlbumFrance -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.CarteMondeVue -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.AlbumMonde(e.idProfil)
+            is Ecran.EpinglerMonde -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.AlbumMonde -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.VoirHangar -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.VoirClassement -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Tournee -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Suivi -> Ecran.EspaceParent
@@ -441,6 +471,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             // La voix et les bruitages mettent un moment à se préparer : on les lance tout de suite.
             voix
             sons
+            // La carte de France des albums se lit pendant ce temps.
+            viewModelScope.launch(Dispatchers.Default) {
+                runCatching {
+                    Atlases.france(getApplication())
+                    Atlases.monde(getApplication())
+                }
+            }
             ecran = Ecran.AccueilEnfant(profil.id)
         }
         return bon
@@ -623,6 +660,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_FRANCAIS, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
         compter(s.profil, s.versSeance())
+
+        // Tous les points : le Petit Avion rapporte la carte d'un département que l'enfant n'a pas
+        // encore. Elle est liée à la séance, pour disparaître si le parent la remet à zéro.
+        if (s.medaille == Medaille.OR) {
+            val dep = RecompenseLangue.tirer(DEPARTEMENTS, { it.code }, donnees(s.profil.id).cartesFrance) ?: return
+            depot.enregistrerCarteGagnee(
+                s.profil.id,
+                CARTES_FRANCE,
+                CarteGagnee(dep.code, Seance.idSeance(s.soir, Matiere.FRANCAIS), System.currentTimeMillis(), epinglee = false, bienPlacee = false),
+            )
+            s.carteGagnee = dep.code
+        }
+    }
+
+    /** Après une dictée à 100 % : la carte de France rapportée par le Petit Avion. */
+    fun ouvrirCarteDeLaDictee() {
+        val s = seanceDictee ?: return
+        val code = s.carteGagnee ?: return
+        fermerDictee(Ecran.CarteDepartement(s.profil.id, code, nouvelle = true))
     }
 
     /** Ajoute une séance terminée aux compteurs de l'année (classement, médailles, tournée des îles). */
@@ -766,7 +822,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_MATHS, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
+        // Tous les points : une pièce pour le hangar (lue avant que la médaille ne soit comptée).
+        if (s.medaille == Medaille.OR) {
+            val avant = (profil(s.profil.id) ?: s.profil).piecesDuHangar
+            s.nouvellePiece = Hangar.nouvellePiece(avant + 1)
+        }
         compter(s.profil, s.versSeance())
+    }
+
+    /** Après une séance de maths à 100 % : le hangar, avec sa nouvelle pièce. */
+    fun ouvrirHangarDepuisCalcul() {
+        val s = seanceCalcul ?: return
+        fermerCalcul(Ecran.VoirHangar(s.profil.id))
+    }
+
+    fun ouvrirHangar(profil: Profil) {
+        ecran = Ecran.VoirHangar(profil.id)
+    }
+
+    /** L'enfant choisit l'engin de son facteur (null : l'engin de départ de son avatar). */
+    fun choisirEngin(profil: Profil, cle: String?) {
+        depot.choisirEngin(profil.id, cle)
     }
 
     /** L'enfant arrête le tri : le calcul en cours compte 0, la séance se reprendra. */
@@ -924,7 +1000,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Une carte de l'album de la langue que l'enfant n'a pas encore. */
     private fun tirerCarteDeLangue(langue: Langue, gagnees: List<CarteGagnee>): String? = when (langue) {
         Langue.ITALIEN -> RecompenseLangue.tirer(toutesLesCartes, { it.id }, gagnees)?.id
-        Langue.ANGLAIS -> null
+        Langue.ANGLAIS -> RecompenseLangue.tirer(TOUR_DU_MONDE, { it.id }, gagnees)?.id
     }
 
     fun quitterLangue() {
@@ -1045,7 +1121,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         seanceLangue = null
         ecran = when (s.langue) {
             Langue.ITALIEN -> Ecran.CartePostaleVue(s.profil.id, carte, nouvelle = true)
-            Langue.ANGLAIS -> Ecran.AccueilEnfant(s.profil.id)
+            Langue.ANGLAIS -> Ecran.CarteMondeVue(s.profil.id, carte, nouvelle = true)
         }
     }
 
@@ -1064,6 +1140,44 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun ouvrirAlbum(profil: Profil) {
         donnees(profil.id)
         ecran = Ecran.Album(profil.id)
+    }
+
+    // ---------- L'album de France ----------
+
+    fun ouvrirCarteDepartement(profil: Profil, code: String, nouvelle: Boolean) {
+        ecran = Ecran.CarteDepartement(profil.id, code, nouvelle)
+    }
+
+    fun ouvrirEpingleDepartement(profil: Profil, code: String) {
+        ecran = Ecran.EpinglerDepartement(profil.id, code)
+    }
+
+    fun epinglerDepartement(profil: Profil, code: String, bienPlacee: Boolean) {
+        depot.marquerEpinglee(profil.id, CARTES_FRANCE, code, bienPlacee)
+    }
+
+    fun ouvrirAlbumFrance(profil: Profil) {
+        donnees(profil.id)
+        ecran = Ecran.AlbumFrance(profil.id)
+    }
+
+    // ---------- Le tour du monde anglophone ----------
+
+    fun ouvrirCarteMonde(profil: Profil, id: String, nouvelle: Boolean) {
+        ecran = Ecran.CarteMondeVue(profil.id, id, nouvelle)
+    }
+
+    fun ouvrirEpingleMonde(profil: Profil, id: String) {
+        ecran = Ecran.EpinglerMonde(profil.id, id)
+    }
+
+    fun epinglerMonde(profil: Profil, id: String, bienPlacee: Boolean) {
+        depot.marquerEpinglee(profil.id, CARTES_MONDE, id, bienPlacee)
+    }
+
+    fun ouvrirAlbumMonde(profil: Profil) {
+        donnees(profil.id)
+        ecran = Ecran.AlbumMonde(profil.id)
     }
 
     fun ouvrirClassement(profil: Profil) {

@@ -14,10 +14,19 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.courrierdesnuages.app.calcul.EcranTriDesColis
 import fr.courrierdesnuages.app.dictee.EcranDictee
+import fr.courrierdesnuages.app.france.EcranAlbumFrance
+import fr.courrierdesnuages.app.france.EcranCarteDepartement
+import fr.courrierdesnuages.app.france.EcranEpinglerDepartement
+import fr.courrierdesnuages.app.france.departement
+import fr.courrierdesnuages.app.hangar.EcranHangar
 import fr.courrierdesnuages.app.italien.EcranAlbum
 import fr.courrierdesnuages.app.italien.EcranCartePostale
 import fr.courrierdesnuages.app.italien.EcranEpingler
 import fr.courrierdesnuages.app.langues.EcranLangue
+import fr.courrierdesnuages.app.monde.EcranAlbumMonde
+import fr.courrierdesnuages.app.monde.EcranCarteMonde
+import fr.courrierdesnuages.app.monde.EcranEpinglerMonde
+import fr.courrierdesnuages.app.monde.carteMonde
 import fr.courrierdesnuages.app.suivi.EcranClassement
 import fr.courrierdesnuages.app.suivi.EcranSuivi
 import fr.courrierdesnuages.app.suivi.EcranTournee
@@ -31,9 +40,9 @@ import fr.courrierdesnuages.app.ui.ecrans.EcranFicheEnfant
 import fr.courrierdesnuages.app.ui.ecrans.EcranNouveauCodeParent
 import fr.courrierdesnuages.app.ui.ecrans.EcranRelier
 import fr.courrierdesnuages.app.ui.parent.EcranCeSoir
+import fr.courrierdesnuages.app.ui.parent.EcranLectureListe
 import fr.courrierdesnuages.app.ui.parent.EcranMotsLangue
 import fr.courrierdesnuages.app.ui.parent.EcranNouvelleCarte
-import fr.courrierdesnuages.app.ui.parent.EcranLectureListe
 
 @Composable
 fun Racine(vm: AppViewModel = viewModel()) {
@@ -85,11 +94,26 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         }
         is Ecran.Dictee -> {
             val s = vm.seanceDictee
-            if (s != null) EcranDictee(seance = s, sons = vm.sons, voix = vm.voix, onQuitter = { vm.quitterDictee() })
+            if (s != null) {
+                EcranDictee(
+                    seance = s,
+                    sons = vm.sons,
+                    voix = vm.voix,
+                    onQuitter = { vm.quitterDictee() },
+                    onOuvrirCarte = { vm.ouvrirCarteDeLaDictee() },
+                )
+            }
         }
         is Ecran.TriDesColis -> {
             val s = vm.seanceCalcul
-            if (s != null) EcranTriDesColis(seance = s, sons = vm.sons, onQuitter = { vm.quitterCalcul() })
+            if (s != null) {
+                EcranTriDesColis(
+                    seance = s,
+                    sons = vm.sons,
+                    onQuitter = { vm.quitterCalcul() },
+                    onOuvrirHangar = { vm.ouvrirHangarDepuisCalcul() },
+                )
+            }
         }
         is Ecran.SeanceDeLangue -> {
             val s = vm.seanceLangue
@@ -115,6 +139,38 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         is Ecran.Album -> {
             val p = vm.profil(e.idProfil)
             if (p != null) EcranAlbum(vm, p)
+        }
+        is Ecran.CarteDepartement -> {
+            val p = vm.profil(e.idProfil)
+            val d = departement(e.code)
+            if (p != null && d != null) EcranCarteDepartement(vm, p, d, e.nouvelle)
+        }
+        is Ecran.EpinglerDepartement -> {
+            val p = vm.profil(e.idProfil)
+            val d = departement(e.code)
+            if (p != null && d != null) EcranEpinglerDepartement(vm, p, d)
+        }
+        is Ecran.AlbumFrance -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranAlbumFrance(vm, p)
+        }
+        is Ecran.CarteMondeVue -> {
+            val p = vm.profil(e.idProfil)
+            val c = carteMonde(e.id)
+            if (p != null && c != null) EcranCarteMonde(vm, p, c, e.nouvelle)
+        }
+        is Ecran.EpinglerMonde -> {
+            val p = vm.profil(e.idProfil)
+            val c = carteMonde(e.id)
+            if (p != null && c != null) EcranEpinglerMonde(vm, p, c)
+        }
+        is Ecran.AlbumMonde -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranAlbumMonde(vm, p)
+        }
+        is Ecran.VoirHangar -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranHangar(vm, p)
         }
         is Ecran.MotsLangue -> EcranMotsLangue(vm, e.langue)
         Ecran.NouvelleCarte -> EcranNouvelleCarte(vm)

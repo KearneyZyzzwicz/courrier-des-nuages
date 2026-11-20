@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.AvatarAnime
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -44,7 +45,7 @@ fun EcranCodeEnfant(vm: AppViewModel, profil: Profil) {
             titre = "Tape ton code secret",
             modifier = Modifier.fillMaxWidth().weight(1f),
             entete = {
-                AvatarAnime(profil.avatar, taille = 120.dp)
+                AvatarAnime(profil.avatar, taille = 120.dp, engin = profil.enginDuFacteur)
                 Spacer(Modifier.height(6.dp))
                 Text(
                     "Bonjour ${profil.prenom} !",

@@ -37,6 +37,8 @@ data class Profil(
     val stats: StatsAnnee = StatsAnnee(),
     /** La collection de médailles par matière, toutes années confondues. */
     val medailles: Map<String, MedaillesGagnees> = emptyMap(),
+    /** L'engin du hangar choisi pour le facteur (null : l'engin de départ de l'avatar). */
+    val engin: String? = null,
 ) {
     fun medaillesDe(matiere: String): MedaillesGagnees = medailles[matiere] ?: MedaillesGagnees()
 }
