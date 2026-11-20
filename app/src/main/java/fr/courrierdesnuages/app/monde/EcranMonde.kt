@@ -58,7 +58,7 @@ import fr.courrierdesnuages.app.cartes.Lieu
 import fr.courrierdesnuages.app.cartes.MerDesCartes
 import fr.courrierdesnuages.app.cartes.TerreVierge
 import fr.courrierdesnuages.app.cartes.TimbreEtTampon
-import fr.courrierdesnuages.app.cartes.chemin
+import fr.courrierdesnuages.app.cartes.cheminsDe
 import fr.courrierdesnuages.app.cartes.rememberAtlasMonde
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.ui.AppViewModel
@@ -115,7 +115,7 @@ fun CarteMonde.lieu(): Lieu = Lieu(id, pays, latitude, longitude, couleurDuPays(
 @Composable
 fun RectoMonde(c: CarteMonde, atlas: Atlas, modifier: Modifier = Modifier) {
     val densite = LocalDensity.current
-    val chemins = remember(atlas) { atlas.formes.mapValues { (_, f) -> f.chemin() } }
+    val chemins = remember(atlas) { cheminsDe(atlas) }
     BoxWithConstraints(
         modifier
             .fillMaxWidth()

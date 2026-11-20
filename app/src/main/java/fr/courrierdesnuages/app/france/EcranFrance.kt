@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -62,7 +63,7 @@ import fr.courrierdesnuages.app.cartes.Forme
 import fr.courrierdesnuages.app.cartes.Lieu
 import fr.courrierdesnuages.app.cartes.TerreVierge
 import fr.courrierdesnuages.app.cartes.TimbreEtTampon
-import fr.courrierdesnuages.app.cartes.chemin
+import fr.courrierdesnuages.app.cartes.cheminsDe
 import fr.courrierdesnuages.app.cartes.rememberAtlasFrance
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.ui.AppViewModel
@@ -118,8 +119,7 @@ fun deLaVille(ville: String): String {
 }
 
 /** Dessine une forme pour qu'elle remplisse au mieux la zone, et renvoie la façon de placer un point. */
-private fun DrawScope.dessinerForme(forme: Forme, couleur: Color, ombre: Boolean, bord: Dp): (Float, Float) -> Offset {
-    val chemin = forme.chemin()
+private fun DrawScope.dessinerForme(forme: Forme, chemin: Path, couleur: Color, ombre: Boolean, bord: Dp): (Float, Float) -> Offset {
     val k = min(size.width / forme.largeur, size.height / forme.hauteur)
     val dx = (size.width - forme.largeur * k) / 2 - forme.gauche * k
     val dy = (size.height - forme.hauteur * k) / 2 - forme.haut * k
@@ -145,6 +145,7 @@ private fun DrawScope.dessinerForme(forme: Forme, couleur: Color, ombre: Boolean
 @Composable
 fun RectoDepartement(d: Departement, atlas: Atlas, modifier: Modifier = Modifier) {
     val forme = atlas.formes[d.code]
+    val chemin = remember(atlas) { cheminsDe(atlas)[d.code] }
     val couleur = couleurDe(d.region)
     val densite = LocalDensity.current
     BoxWithConstraints(
@@ -172,8 +173,8 @@ fun RectoDepartement(d: Departement, atlas: Atlas, modifier: Modifier = Modifier
                 .fillMaxWidth(0.55f)
                 .padding(u * 5),
         ) {
-            if (forme != null) {
-                val placer = dessinerForme(forme, couleur, ombre = true, bord = 2.dp)
+            if (forme != null && chemin != null) {
+                val placer = dessinerForme(forme, chemin, couleur, ombre = true, bord = 2.dp)
                 val (vx, vy) = atlas.position(d.latitude, d.longitude)
                 val c = placer(vx, vy)
                 drawCircle(Color.White, u.toPx() * 2.1f, c)
@@ -244,9 +245,10 @@ fun VersoDepartement(d: Departement, atlas: Atlas, prenom: String, gagneeLe: Lon
                     Text("Bonjour $prenom !", style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Rouge))
                 }
                 val forme = atlas.formes[d.code]
+                val chemin = remember(atlas) { cheminsDe(atlas)[d.code] }
                 TimbreEtTampon(d.ville, dateDuTampon(gagneeLe), couleurDe(d.region), "FRANCE", d.code) {
-                    if (forme != null) {
-                        Canvas(Modifier.fillMaxSize()) { dessinerForme(forme, Color.White.copy(alpha = 0.9f), ombre = false, bord = 0.5.dp) }
+                    if (forme != null && chemin != null) {
+                        Canvas(Modifier.fillMaxSize()) { dessinerForme(forme, chemin, Color.White.copy(alpha = 0.9f), ombre = false, bord = 0.5.dp) }
                     }
                 }
             }

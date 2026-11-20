@@ -113,6 +113,16 @@ fun Forme.chemin(): Path = Path().apply {
     }
 }
 
+private val cacheDesChemins = java.util.WeakHashMap<Atlas, Map<String, Path>>()
+
+/**
+ * Les contours de toutes les formes d'un atlas, construits une seule fois et partagés par les
+ * cartes, les rectos et les timbres (ils ne sont que lus pour dessiner).
+ */
+fun cheminsDe(atlas: Atlas): Map<String, Path> = synchronized(cacheDesChemins) {
+    cacheDesChemins.getOrPut(atlas) { atlas.formes.mapValues { (_, f) -> f.chemin() } }
+}
+
 /** Une épingle plantée sur la carte (position en unités de carte). */
 data class Repere(val x: Float, val y: Float, val couleur: Color)
 
@@ -191,7 +201,7 @@ fun CarteAtlas(
     trait: Pair<Offset, Offset>? = null,
     surToucher: ((x: Float, y: Float, rayon: Float, petite: Float) -> Unit)? = null,
 ) {
-    val chemins = remember(atlas) { atlas.formes.mapValues { (_, f) -> f.chemin() } }
+    val chemins = remember(atlas) { cheminsDe(atlas) }
     val mesureur = rememberTextMeasurer()
     val styleEtiquette = TextStyle(fontFamily = Fredoka, fontWeight = FontWeight.Bold, fontSize = 10.sp, color = Encre)
     val textes = remember(etiquettes) { etiquettes.mapValues { (_, t) -> mesureur.measure(t, styleEtiquette) } }
