@@ -28,8 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import fr.courrierdesnuages.app.france.DEPARTEMENTS
-import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
+import fr.courrierdesnuages.app.data.DonneesEnfant
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Medaille
@@ -37,23 +36,28 @@ import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
+import fr.courrierdesnuages.app.france.DEPARTEMENTS
+import fr.courrierdesnuages.app.hangar.ENGINS
+import fr.courrierdesnuages.app.hangar.Hangar
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
+import fr.courrierdesnuages.app.hangar.piecesDuHangar
+import fr.courrierdesnuages.app.italien.Semaines
 import fr.courrierdesnuages.app.langues.Langue
 import fr.courrierdesnuages.app.langues.couleurDe
 import fr.courrierdesnuages.app.langues.messagerDe
-import fr.courrierdesnuages.app.data.DonneesEnfant
+import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.AvatarAnime
-import fr.courrierdesnuages.app.italien.Semaines
 import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
 import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
 import fr.courrierdesnuages.app.ui.composants.Carte
-import java.time.LocalDate
 import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
 import fr.courrierdesnuages.app.ui.theme.Jaune
 import fr.courrierdesnuages.app.ui.theme.Rouge
 import fr.courrierdesnuages.app.ui.theme.Vert
+import java.time.LocalDate
 
 /** L'accueil de l'enfant une fois son code tapé. */
 @Composable
@@ -73,7 +77,7 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
                 icone = Icons.AutoMirrored.Filled.ExitToApp,
             )
         }
-        AvatarAnime(profil.avatar, taille = 150.dp)
+        AvatarAnime(profil.avatar, taille = 150.dp, engin = profil.enginDuFacteur)
         Text(
             "Bonjour ${profil.prenom} !",
             style = MaterialTheme.typography.displaySmall,
@@ -81,7 +85,7 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
             textAlign = TextAlign.Center,
         )
         Text(
-            "${profil.avatar.nom} ${profil.avatar.engin} t'attend pour la tournée.",
+            "${profil.avatar.nom} ${profil.enginDuFacteur?.en ?: profil.avatar.engin} t'attend pour la tournée.",
             style = MaterialTheme.typography.bodyLarge,
             color = EncreDouce,
             textAlign = TextAlign.Center,
@@ -213,6 +217,13 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
         BoutonSecondaire(
             texte = "Mon tour du monde (${donnees.cartesMonde.size} sur ${TOUR_DU_MONDE.size})",
             onClick = { vm.ouvrirAlbumMonde(profil) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        val engins = Hangar.construits(profil.piecesDuHangar).size
+        BoutonSecondaire(
+            texte = "Mon hangar (${engins} engin${if (engins > 1) "s" else ""} sur ${ENGINS.size})",
+            onClick = { vm.ouvrirHangar(profil) },
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))

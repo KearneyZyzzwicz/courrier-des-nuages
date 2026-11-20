@@ -8,7 +8,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -24,9 +23,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import fr.courrierdesnuages.app.data.Avatar
+import fr.courrierdesnuages.app.hangar.BadgeFacteur
+import fr.courrierdesnuages.app.hangar.Engin
 import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.CielHaut
 import fr.courrierdesnuages.app.ui.theme.Nuage
@@ -85,17 +85,13 @@ private fun DrawScope.nuage(cx: Float, cy: Float, r: Float) {
 }
 
 @Composable
-fun ImageAvatar(avatar: Avatar, taille: Dp, modifier: Modifier = Modifier) {
-    Image(
-        painter = painterResource(avatar.image),
-        contentDescription = "${avatar.nom} ${avatar.engin}",
-        modifier = modifier.size(taille),
-    )
+fun ImageAvatar(avatar: Avatar, taille: Dp, modifier: Modifier = Modifier, engin: Engin? = null) {
+    BadgeFacteur(avatar, engin, modifier.size(taille))
 }
 
 /** L'avatar flotte doucement, comme porté par le vent. */
 @Composable
-fun AvatarAnime(avatar: Avatar, taille: Dp, modifier: Modifier = Modifier, decalage: Int = 0) {
+fun AvatarAnime(avatar: Avatar, taille: Dp, modifier: Modifier = Modifier, decalage: Int = 0, engin: Engin? = null) {
     val transition = rememberInfiniteTransition(label = "avatar")
     val t = transition.animateFloat(
         initialValue = -1f,
@@ -110,6 +106,7 @@ fun AvatarAnime(avatar: Avatar, taille: Dp, modifier: Modifier = Modifier, decal
     ImageAvatar(
         avatar = avatar,
         taille = taille,
+        engin = engin,
         modifier = modifier.graphicsLayer {
             translationY = t.value * taille.toPx() * 0.035f
             rotationZ = t.value * 2.5f

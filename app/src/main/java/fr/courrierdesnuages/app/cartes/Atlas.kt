@@ -45,34 +45,45 @@ class Forme(val id: String, val anneaux: List<FloatArray>, val etiquetteX: Float
     fun contient(x: Float, y: Float): Boolean {
         if (x < gauche || x > droite || y < haut || y > bas) return false
         var dedans = false
-        for (a in anneaux) {
-            val n = a.size / 2
-            var j = n - 1
-            for (i in 0 until n) {
-                val xi = a[2 * i]
-                val yi = a[2 * i + 1]
-                val xj = a[2 * j]
-                val yj = a[2 * j + 1]
-                if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) dedans = !dedans
-                j = i
-            }
+        for (a in anneaux) if (traverse(a, x, y)) dedans = !dedans
+        return dedans
+    }
+
+    /** Règle pair-impair pour un anneau : vrai si le point est à l'intérieur de ce contour. */
+    private fun traverse(a: FloatArray, x: Float, y: Float): Boolean {
+        var dedans = false
+        val n = a.size / 2
+        var j = n - 1
+        for (i in 0 until n) {
+            val xi = a[2 * i]
+            val yi = a[2 * i + 1]
+            val xj = a[2 * j]
+            val yj = a[2 * j + 1]
+            if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) dedans = !dedans
+            j = i
         }
         return dedans
+    }
+
+    private fun distanceAuBord(a: FloatArray, x: Float, y: Float): Float {
+        var m = Float.MAX_VALUE
+        val n = a.size / 2
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            m = min(m, distanceAuSegment(x, y, a[2 * i], a[2 * i + 1], a[2 * j], a[2 * j + 1]))
+        }
+        return m
     }
 
     /** La distance du point au bord de la forme, 0 s'il est dedans. */
     fun distance(x: Float, y: Float): Float {
         if (contient(x, y)) return 0f
-        var m = Float.MAX_VALUE
-        for (a in anneaux) {
-            val n = a.size / 2
-            for (i in 0 until n) {
-                val j = (i + 1) % n
-                m = min(m, distanceAuSegment(x, y, a[2 * i], a[2 * i + 1], a[2 * j], a[2 * j + 1]))
-            }
-        }
-        return m
+        return anneaux.minOf { distanceAuBord(it, x, y) }
     }
+
+    /** Le contour (une île, un continent) qui contient le point, ou à défaut le plus proche. */
+    fun anneauPres(x: Float, y: Float): FloatArray =
+        anneaux.firstOrNull { traverse(it, x, y) } ?: anneaux.minBy { distanceAuBord(it, x, y) }
 
     private fun distanceAuSegment(x: Float, y: Float, x1: Float, y1: Float, x2: Float, y2: Float): Float {
         val dx = x2 - x1

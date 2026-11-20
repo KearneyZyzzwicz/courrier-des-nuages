@@ -2,11 +2,14 @@ package fr.courrierdesnuages.app.ui.ecrans
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -30,13 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import java.time.LocalDate
 import fr.courrierdesnuages.app.data.Jours
-import fr.courrierdesnuages.app.italien.Semaines
-import fr.courrierdesnuages.app.langues.Langue
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.data.Seance
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
+import fr.courrierdesnuages.app.italien.Semaines
+import fr.courrierdesnuages.app.langues.Langue
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.BanniereMiseAJour
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -45,14 +48,12 @@ import fr.courrierdesnuages.app.ui.composants.BoutonSecondaire
 import fr.courrierdesnuages.app.ui.composants.Carte
 import fr.courrierdesnuages.app.ui.composants.ImageAvatar
 import fr.courrierdesnuages.app.ui.composants.Pastille
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.heightIn
 import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
 import fr.courrierdesnuages.app.ui.theme.RougeFonce
 import fr.courrierdesnuages.app.ui.theme.Vert
+import java.time.LocalDate
 
 @Composable
 fun EcranEspaceParent(vm: AppViewModel) {
@@ -251,7 +252,7 @@ private fun LigneEnfant(profil: Profil, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            ImageAvatar(profil.avatar, taille = 56.dp)
+            ImageAvatar(profil.avatar, taille = 56.dp, engin = profil.enginDuFacteur)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(profil.prenom, style = MaterialTheme.typography.titleMedium)
@@ -293,7 +294,7 @@ private fun LigneSuivi(profil: Profil, resume: String, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            ImageAvatar(profil.avatar, taille = 48.dp)
+            ImageAvatar(profil.avatar, taille = 48.dp, engin = profil.enginDuFacteur)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(profil.prenom, style = MaterialTheme.typography.titleMedium)
@@ -320,7 +321,7 @@ private fun LigneSoir(profil: Profil, envoye: Boolean, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            ImageAvatar(profil.avatar, taille = 48.dp)
+            ImageAvatar(profil.avatar, taille = 48.dp, engin = profil.enginDuFacteur)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(profil.prenom, style = MaterialTheme.typography.titleMedium)

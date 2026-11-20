@@ -69,6 +69,7 @@ import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
 import fr.courrierdesnuages.app.dictee.texteMedaille
+import fr.courrierdesnuages.app.hangar.CarteNouvellePiece
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
 import fr.courrierdesnuages.app.ui.composants.Carte
@@ -95,7 +96,7 @@ private val styleNumero = TextStyle(fontFamily = Fredoka, fontWeight = FontWeigh
 
 /** Le centre de tri : chaque calcul est l'étiquette d'un colis, le résultat est le numéro du casier. */
 @Composable
-fun EcranTriDesColis(seance: SeanceCalcul, sons: Sons, onQuitter: () -> Unit) {
+fun EcranTriDesColis(seance: SeanceCalcul, sons: Sons, onQuitter: () -> Unit, onOuvrirHangar: () -> Unit = {}) {
     var confirmerArret by remember { mutableStateOf(false) }
     val enCours = seance.etape != EtapeCalcul.FIN
     BackHandler { if (enCours) confirmerArret = true else onQuitter() }
@@ -139,7 +140,7 @@ fun EcranTriDesColis(seance: SeanceCalcul, sons: Sons, onQuitter: () -> Unit) {
                 )
             }
         }
-        if (enCours) DeroulementCalcul(seance, sons) else ResumeCalculs(seance, onQuitter)
+        if (enCours) DeroulementCalcul(seance, sons) else ResumeCalculs(seance, onQuitter, onOuvrirHangar)
     }
 
     if (confirmerArret) {
@@ -502,7 +503,7 @@ private fun RowScope.ToucheCalcul(
 }
 
 @Composable
-private fun ResumeCalculs(seance: SeanceCalcul, onRetour: () -> Unit) {
+private fun ResumeCalculs(seance: SeanceCalcul, onRetour: () -> Unit, onOuvrirHangar: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
@@ -534,6 +535,11 @@ private fun ResumeCalculs(seance: SeanceCalcul, onRetour: () -> Unit) {
                 color = EncreDouce,
                 textAlign = TextAlign.Center,
             )
+        }
+        val piece = seance.nouvellePiece
+        if (piece != null) {
+            Spacer(Modifier.height(16.dp))
+            CarteNouvellePiece(piece, seance.profil.avatar, onOuvrirHangar)
         }
         Spacer(Modifier.height(16.dp))
         Carte(Modifier.fillMaxWidth()) {

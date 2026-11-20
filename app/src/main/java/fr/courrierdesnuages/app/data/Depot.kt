@@ -91,12 +91,18 @@ class Depot {
                     listeLe = doc.getLong("listeLe") ?: 0L,
                     stats = lireStats(doc.get("annees") as? Map<*, *>, Jours.anneeScolaire()),
                     medailles = lireMedailles(doc.get("annees") as? Map<*, *>),
+                    engin = doc.getString("engin"),
                 )
             }
             rappel(liste.sortedWith(compareBy<Profil>({ it.ordre }, { it.prenom })))
         }
 
     fun nouvelIdProfil(): String = db.collection("profils").document().id
+
+    /** L'engin du hangar choisi pour le facteur ; null pour revenir à l'engin de départ. */
+    fun choisirEngin(idProfil: String, cle: String?) {
+        profilRef(idProfil).update("engin", cle ?: FieldValue.delete())
+    }
 
     fun enregistrerProfil(id: String, champs: Map<String, Any>) {
         profilRef(id).set(champs, SetOptions.merge())

@@ -135,8 +135,20 @@ fun RectoMonde(c: CarteMonde, atlas: Atlas, modifier: Modifier = Modifier) {
         ) {
             val pays = atlas.formes[c.pays] ?: return@Canvas
             val (vx, vy) = atlas.position(c.latitude, c.longitude)
-            // La fenêtre : centrée sur la ville, à la taille du pays (ni trop petite, ni trop grande).
-            val cote = (max(pays.largeur, pays.hauteur) * 1.1f).coerceIn(34f, 110f)
+            // La fenêtre : centrée sur la ville, à la taille de sa terre (l'île d'Hawaï plutôt que
+            // tous les États-Unis), ni trop petite ni trop grande.
+            val anneau = pays.anneauPres(vx, vy)
+            var lMin = Float.MAX_VALUE
+            var lMax = -Float.MAX_VALUE
+            var hMin = Float.MAX_VALUE
+            var hMax = -Float.MAX_VALUE
+            for (i in anneau.indices step 2) {
+                lMin = min(lMin, anneau[i])
+                lMax = max(lMax, anneau[i])
+                hMin = min(hMin, anneau[i + 1])
+                hMax = max(hMax, anneau[i + 1])
+            }
+            val cote = (max(lMax - lMin, hMax - hMin) * 1.1f).coerceIn(30f, 110f)
             val k = min(size.width, size.height) / cote
             val dx = size.width / 2 - vx * k
             val dy = size.height / 2 - vy * k

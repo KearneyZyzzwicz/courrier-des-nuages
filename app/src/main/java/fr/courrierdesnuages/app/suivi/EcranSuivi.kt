@@ -31,11 +31,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import fr.courrierdesnuages.app.france.DEPARTEMENTS
-import fr.courrierdesnuages.app.france.departement
-import fr.courrierdesnuages.app.italien.CarteGagnee
-import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
-import fr.courrierdesnuages.app.monde.carteMonde
 import fr.courrierdesnuages.app.data.DonneesEnfant
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
@@ -45,7 +40,13 @@ import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
+import fr.courrierdesnuages.app.france.DEPARTEMENTS
+import fr.courrierdesnuages.app.france.departement
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
+import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.langues.Langue
+import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
+import fr.courrierdesnuages.app.monde.carteMonde
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.SEMAINE_OFFERTE
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -145,7 +146,7 @@ private fun fusionSoirs(annee: List<Soir>?, recents: List<Soir>): List<Soir> {
 private fun CarteAujourdhui(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
     Carte(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ImageAvatar(profil.avatar, taille = 56.dp)
+            ImageAvatar(profil.avatar, taille = 56.dp, engin = profil.enginDuFacteur)
             Spacer(Modifier.width(12.dp))
             Column {
                 Text("Aujourd'hui", style = MaterialTheme.typography.titleLarge)

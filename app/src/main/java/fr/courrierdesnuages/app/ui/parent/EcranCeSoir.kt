@@ -56,6 +56,7 @@ import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
 import fr.courrierdesnuages.app.lecture.LecteurDeListe
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -155,7 +156,7 @@ fun EcranCeSoir(vm: AppViewModel, profil: Profil) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ImageAvatar(profil.avatar, taille = 56.dp)
+                ImageAvatar(profil.avatar, taille = 56.dp, engin = profil.enginDuFacteur)
                 Spacer(Modifier.width(12.dp))
                 Text(
                     "${Jours.enClair(aujourdhui).replaceFirstChar { it.uppercase() }} · ${profil.classe}",

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.courrierdesnuages.app.R
 import fr.courrierdesnuages.app.data.Profil
+import fr.courrierdesnuages.app.hangar.enginDuFacteur
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.AvatarAnime
 import fr.courrierdesnuages.app.ui.composants.BanniereMiseAJour
@@ -111,7 +112,7 @@ private fun CarteProfil(profil: Profil, rang: Int, onClick: () -> Unit) {
             Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            AvatarAnime(profil.avatar, taille = 112.dp, decalage = rang * 700)
+            AvatarAnime(profil.avatar, taille = 112.dp, decalage = rang * 700, engin = profil.enginDuFacteur)
             Spacer(Modifier.height(8.dp))
             Text(
                 profil.prenom,

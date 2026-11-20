@@ -16,9 +16,12 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import fr.courrierdesnuages.app.BuildConfig
 import fr.courrierdesnuages.app.calcul.Calcul
-import fr.courrierdesnuages.app.cartes.Atlases
 import fr.courrierdesnuages.app.calcul.SeanceCalcul
+import fr.courrierdesnuages.app.cartes.Atlases
 import fr.courrierdesnuages.app.data.Avatar
+import fr.courrierdesnuages.app.data.CARTES_FRANCE
+import fr.courrierdesnuages.app.data.CARTES_ITALIE
+import fr.courrierdesnuages.app.data.CARTES_MONDE
 import fr.courrierdesnuages.app.data.CodeParent
 import fr.courrierdesnuages.app.data.Codes
 import fr.courrierdesnuages.app.data.Compte
@@ -26,12 +29,9 @@ import fr.courrierdesnuages.app.data.Depot
 import fr.courrierdesnuages.app.data.DonneesEnfant
 import fr.courrierdesnuages.app.data.Jours
 import fr.courrierdesnuages.app.data.Matiere
+import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
-import fr.courrierdesnuages.app.data.CARTES_FRANCE
-import fr.courrierdesnuages.app.data.CARTES_ITALIE
-import fr.courrierdesnuages.app.data.CARTES_MONDE
-import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.REVISIONS_FRANCAIS
 import fr.courrierdesnuages.app.data.REVISIONS_MATHS
 import fr.courrierdesnuages.app.data.ResultatMot
@@ -40,6 +40,8 @@ import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.dictee.SeanceDictee
 import fr.courrierdesnuages.app.france.DEPARTEMENTS
+import fr.courrierdesnuages.app.hangar.Hangar
+import fr.courrierdesnuages.app.hangar.piecesDuHangar
 import fr.courrierdesnuages.app.italien.CARTES_INTEGREES
 import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.italien.CartePostale
@@ -52,18 +54,18 @@ import fr.courrierdesnuages.app.langues.RecompenseLangue
 import fr.courrierdesnuages.app.langues.SeanceLangue
 import fr.courrierdesnuages.app.langues.SemaineLangue
 import fr.courrierdesnuages.app.maj.MiseAJour
-import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
 import fr.courrierdesnuages.app.maj.NouvelleVersion
+import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.son.Voix
 import fr.courrierdesnuages.app.suivi.Classement
 import fr.courrierdesnuages.app.suivi.RemiseAZero
+import java.io.File
+import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import java.io.File
-import java.time.LocalDate
 
 /** Les écrans de l'appli. Les profils sont désignés par leur identifiant. */
 sealed interface Ecran {
@@ -89,6 +91,7 @@ sealed interface Ecran {
     data class CarteMondeVue(val idProfil: String, val id: String, val nouvelle: Boolean) : Ecran
     data class EpinglerMonde(val idProfil: String, val id: String) : Ecran
     data class AlbumMonde(val idProfil: String) : Ecran
+    data class VoirHangar(val idProfil: String) : Ecran
     data class MotsLangue(val langue: Langue) : Ecran
     data object NouvelleCarte : Ecran
     data class VoirClassement(val idProfil: String) : Ecran
@@ -325,6 +328,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CarteMondeVue -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.EpinglerMonde -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.AlbumMonde -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.VoirHangar -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.VoirClassement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Tournee -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Suivi -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
@@ -448,6 +452,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.CarteMondeVue -> if (e.nouvelle) Ecran.AccueilEnfant(e.idProfil) else Ecran.AlbumMonde(e.idProfil)
             is Ecran.EpinglerMonde -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.AlbumMonde -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.VoirHangar -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.VoirClassement -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Tournee -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Suivi -> Ecran.EspaceParent
@@ -817,7 +822,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         depot.terminerSeance(s.profil.id, s.versSeance(), REVISIONS_MATHS, aEcrire, aSupprimer, RemiseAZero.trace(aEcrire, aSupprimer, actuelles))
+        // Tous les points : une pièce pour le hangar (lue avant que la médaille ne soit comptée).
+        if (s.medaille == Medaille.OR) {
+            val avant = (profil(s.profil.id) ?: s.profil).piecesDuHangar
+            s.nouvellePiece = Hangar.nouvellePiece(avant + 1)
+        }
         compter(s.profil, s.versSeance())
+    }
+
+    /** Après une séance de maths à 100 % : le hangar, avec sa nouvelle pièce. */
+    fun ouvrirHangarDepuisCalcul() {
+        val s = seanceCalcul ?: return
+        fermerCalcul(Ecran.VoirHangar(s.profil.id))
+    }
+
+    fun ouvrirHangar(profil: Profil) {
+        ecran = Ecran.VoirHangar(profil.id)
+    }
+
+    /** L'enfant choisit l'engin de son facteur (null : l'engin de départ de son avatar). */
+    fun choisirEngin(profil: Profil, cle: String?) {
+        depot.choisirEngin(profil.id, cle)
     }
 
     /** L'enfant arrête le tri : le calcul en cours compte 0, la séance se reprendra. */

@@ -18,6 +18,7 @@ import fr.courrierdesnuages.app.france.EcranAlbumFrance
 import fr.courrierdesnuages.app.france.EcranCarteDepartement
 import fr.courrierdesnuages.app.france.EcranEpinglerDepartement
 import fr.courrierdesnuages.app.france.departement
+import fr.courrierdesnuages.app.hangar.EcranHangar
 import fr.courrierdesnuages.app.italien.EcranAlbum
 import fr.courrierdesnuages.app.italien.EcranCartePostale
 import fr.courrierdesnuages.app.italien.EcranEpingler
@@ -39,9 +40,9 @@ import fr.courrierdesnuages.app.ui.ecrans.EcranFicheEnfant
 import fr.courrierdesnuages.app.ui.ecrans.EcranNouveauCodeParent
 import fr.courrierdesnuages.app.ui.ecrans.EcranRelier
 import fr.courrierdesnuages.app.ui.parent.EcranCeSoir
+import fr.courrierdesnuages.app.ui.parent.EcranLectureListe
 import fr.courrierdesnuages.app.ui.parent.EcranMotsLangue
 import fr.courrierdesnuages.app.ui.parent.EcranNouvelleCarte
-import fr.courrierdesnuages.app.ui.parent.EcranLectureListe
 
 @Composable
 fun Racine(vm: AppViewModel = viewModel()) {
@@ -105,7 +106,14 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         }
         is Ecran.TriDesColis -> {
             val s = vm.seanceCalcul
-            if (s != null) EcranTriDesColis(seance = s, sons = vm.sons, onQuitter = { vm.quitterCalcul() })
+            if (s != null) {
+                EcranTriDesColis(
+                    seance = s,
+                    sons = vm.sons,
+                    onQuitter = { vm.quitterCalcul() },
+                    onOuvrirHangar = { vm.ouvrirHangarDepuisCalcul() },
+                )
+            }
         }
         is Ecran.SeanceDeLangue -> {
             val s = vm.seanceLangue
@@ -159,6 +167,10 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
         is Ecran.AlbumMonde -> {
             val p = vm.profil(e.idProfil)
             if (p != null) EcranAlbumMonde(vm, p)
+        }
+        is Ecran.VoirHangar -> {
+            val p = vm.profil(e.idProfil)
+            if (p != null) EcranHangar(vm, p)
         }
         is Ecran.MotsLangue -> EcranMotsLangue(vm, e.langue)
         Ecran.NouvelleCarte -> EcranNouvelleCarte(vm)
