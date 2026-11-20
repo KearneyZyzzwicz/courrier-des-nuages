@@ -41,7 +41,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import fr.courrierdesnuages.app.data.Jours
-import fr.courrierdesnuages.app.italien.MotItalien
 import fr.courrierdesnuages.app.italien.Semaines
 import fr.courrierdesnuages.app.italien.VILLES
 import fr.courrierdesnuages.app.italien.Ville
@@ -58,94 +57,6 @@ import fr.courrierdesnuages.app.ui.theme.EncreDouce
 import fr.courrierdesnuages.app.ui.theme.RougeFonce
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-
-private val JOURS = listOf("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi")
-
-/** Le parent saisit les 5 mots d'italien de la semaine (les mêmes pour les trois enfants). */
-@Composable
-fun EcranMotsItalien(vm: AppViewModel) {
-    val aujourdhui = remember { LocalDate.now() }
-    val courante = Semaines.lundi(aujourdhui).toString()
-    val aPreparer = Semaines.semaineAPreparer(aujourdhui).toString()
-    // Le week-end, on prépare d'habitude la semaine suivante, mais on peut encore corriger la semaine en cours.
-    var lundi by remember { mutableStateOf(aPreparer) }
-    val francais = remember { mutableStateListOf("", "", "", "", "") }
-    val italien = remember { mutableStateListOf("", "", "", "", "") }
-    var remplisPour by remember { mutableStateOf<String?>(null) }
-    val charge = vm.semaineChargee(lundi)
-
-    LaunchedEffect(lundi, charge) {
-        if (charge && remplisPour != lundi) {
-            val mots = vm.semaine(lundi)?.mots.orEmpty()
-            for (i in 0 until 5) {
-                francais[i] = mots.getOrNull(i)?.francais.orEmpty()
-                italien[i] = mots.getOrNull(i)?.italien.orEmpty()
-            }
-            remplisPour = lundi
-        }
-    }
-
-    val complets = (0 until 5).count { francais[it].isNotBlank() && italien[it].isNotBlank() }
-    val incomplets = (0 until 5).count { francais[it].isNotBlank() != italien[it].isNotBlank() }
-
-    Column(Modifier.fillMaxSize()) {
-        BarreRetour("Mots d'italien", onRetour = { vm.retour() })
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            if (courante != aPreparer) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Pastille(texte = "Cette semaine", choisie = lundi == courante, onClick = { lundi = courante })
-                    Pastille(texte = "Semaine prochaine", choisie = lundi == aPreparer, onClick = { lundi = aPreparer })
-                }
-            }
-            Text(
-                "Semaine du ${Jours.enClair(lundi)} : un mot par jour, du lundi au vendredi, pour les trois enfants. " +
-                    "Le week-end, ils peuvent rattraper les mots pas encore faits. " +
-                    "Écris l'italien avec l'article et les accents (« il gatto », « la città »).",
-                style = MaterialTheme.typography.bodyLarge,
-                color = EncreDouce,
-            )
-            for (i in 0 until 5) {
-                Carte(Modifier.fillMaxWidth()) {
-                    Text(JOURS[i], style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = francais[i],
-                        onValueChange = { francais[i] = it.take(40) },
-                        label = { Text("En français") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = italien[i],
-                        onValueChange = { italien[i] = it.take(40) },
-                        label = { Text("En italien") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = if (i < 4) ImeAction.Next else ImeAction.Done),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-            if (incomplets > 0) {
-                Text("Il manque la traduction (ou le mot français) sur une ligne.", color = RougeFonce, style = MaterialTheme.typography.bodyMedium)
-            }
-            BoutonPrincipal(
-                texte = "Enregistrer les $complets mot${if (complets > 1) "s" else ""}",
-                onClick = { vm.enregistrerMotsItalien(lundi, (0 until 5).map { MotItalien(francais[it], italien[it]) }) },
-                actif = complets > 0 && incomplets == 0,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(24.dp))
-        }
-    }
-}
 
 /** Le parent crée une carte postale : la ville (dans la liste), une image du téléphone et un petit texte. */
 @Composable

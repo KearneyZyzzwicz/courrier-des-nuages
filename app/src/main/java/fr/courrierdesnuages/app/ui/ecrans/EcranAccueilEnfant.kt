@@ -35,6 +35,10 @@ import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
+import fr.courrierdesnuages.app.langues.Langue
+import fr.courrierdesnuages.app.langues.couleurDe
+import fr.courrierdesnuages.app.langues.messagerDe
+import fr.courrierdesnuages.app.data.DonneesEnfant
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.AvatarAnime
 import fr.courrierdesnuages.app.italien.Semaines
@@ -160,48 +164,8 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
                 onClick = { vm.commencerCalcul(profil) },
             )
         }
-        // Italien : le pigeon voyageur apporte le mot du jour (du lundi au vendredi) ; le week-end,
-        // on rattrape les mots de la semaine pas encore faits et on revoit ceux qui n'étaient pas sus.
-        val jour = Jours.aujourdhui()
-        val seanceItalien = donnees.seance(jour, Matiere.ITALIEN)
-        val lundi = Semaines.lundi(LocalDate.now()).toString()
-        val motsItalien = if (donnees.chargees) vm.motsDuSoirItalien(profil) else emptyList()
-        val motDuJour = vm.motDuJourItalien()
-        when {
-            !donnees.chargees || !vm.semaineChargee(lundi) ->
-                TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Ouverture…")
-            seanceItalien == null && motsItalien.isEmpty() ->
-                TuileMatiere("Italien", "Le pigeon voyageur", Jaune, "Ciao", etat = "Pas de mot aujourd'hui")
-            seanceItalien == null -> TuileMatiere(
-                matiere = "Italien",
-                titre = when {
-                    motDuJour != null && motsItalien.size > 1 ->
-                        "Le mot du jour + ${motsItalien.size - 1} autre${if (motsItalien.size > 2) "s" else ""}"
-                    motDuJour != null -> "Le mot du jour"
-                    else -> "${motsItalien.size} mot${if (motsItalien.size > 1) "s" else ""} à rattraper"
-                },
-                couleur = Jaune,
-                symbole = "Ciao",
-                etat = "C'est parti !",
-                onClick = { vm.commencerItalien(profil) },
-            )
-            !seanceItalien.terminee -> TuileMatiere(
-                matiere = "Italien",
-                titre = "Message ${seanceItalien.resultats.size + 1} sur ${seanceItalien.ordre.size}",
-                couleur = Jaune,
-                symbole = "Ciao",
-                etat = "Reprendre",
-                onClick = { vm.commencerItalien(profil) },
-            )
-            else -> TuileMatiere(
-                matiere = "Italien",
-                titre = "Fait : ${pointsEnTexte(seanceItalien.points)} / ${seanceItalien.ordre.size}",
-                couleur = Jaune,
-                symbole = "Ciao",
-                etat = "S'entraîner",
-                onClick = { vm.commencerItalien(profil) },
-            )
-        }
+        // Les langues : le messager apporte les mots du jour ; les jours sans séance, les mots attendent.
+        for (langue in Langue.entries) TuileLangue(vm, profil, donnees, langue)
 
         // L'album des cartes postales, et la carte qui attend d'être épinglée.
         val aEpingler = donnees.cartesGagnees.firstOrNull { !it.epinglee }
@@ -298,5 +262,54 @@ private fun TuileMatiere(
             shadowElevation = 1.dp,
             modifier = modifier.alpha(0.85f),
         ) { contenu() }
+    }
+}
+
+/** La tuile d'une langue : les mots du jour, ceux qui attendent et ceux à revoir. */
+@Composable
+private fun TuileLangue(vm: AppViewModel, profil: Profil, donnees: DonneesEnfant, langue: Langue) {
+    val jour = Jours.aujourdhui()
+    val seance = donnees.seance(jour, langue.matiere)
+    val lundi = Semaines.lundi(LocalDate.now()).toString()
+    val mots = if (donnees.chargees) vm.motsDuSoir(langue, profil) else emptyList()
+    val duJour = vm.motsDuJour(langue).size
+    val messager = messagerDe(langue).nom
+    val couleur = couleurDe(langue)
+    when {
+        !donnees.chargees || !vm.semaineChargee(langue, lundi) ->
+            TuileMatiere(langue.nom, messager, couleur, langue.symbole, etat = "Ouverture…")
+        seance == null && mots.isEmpty() ->
+            TuileMatiere(langue.nom, messager, couleur, langue.symbole, etat = "Pas de mot aujourd'hui")
+        seance == null -> {
+            val autres = mots.size - duJour
+            TuileMatiere(
+                matiere = langue.nom,
+                titre = when {
+                    duJour > 0 && autres > 0 -> "$duJour mot${if (duJour > 1) "s" else ""} du jour + $autres autre${if (autres > 1) "s" else ""}"
+                    duJour > 0 -> "$duJour mot${if (duJour > 1) "s" else ""} du jour"
+                    else -> "${mots.size} mot${if (mots.size > 1) "s" else ""} à rattraper"
+                },
+                couleur = couleur,
+                symbole = langue.symbole,
+                etat = "C'est parti !",
+                onClick = { vm.commencerLangue(langue, profil) },
+            )
+        }
+        !seance.terminee -> TuileMatiere(
+            matiere = langue.nom,
+            titre = "Message ${seance.resultats.size + 1} sur ${seance.ordre.size}",
+            couleur = couleur,
+            symbole = langue.symbole,
+            etat = "Reprendre",
+            onClick = { vm.commencerLangue(langue, profil) },
+        )
+        else -> TuileMatiere(
+            matiere = langue.nom,
+            titre = "Fait : ${pointsEnTexte(seance.points)} / ${seance.ordre.size}",
+            couleur = couleur,
+            symbole = langue.symbole,
+            etat = "S'entraîner",
+            onClick = { vm.commencerLangue(langue, profil) },
+        )
     }
 }

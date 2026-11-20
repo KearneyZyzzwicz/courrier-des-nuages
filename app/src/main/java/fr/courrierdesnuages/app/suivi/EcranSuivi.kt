@@ -40,6 +40,7 @@ import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
+import fr.courrierdesnuages.app.langues.Langue
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.SEMAINE_OFFERTE
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
@@ -138,10 +139,9 @@ private fun EtatsDuJour(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
         soir.date == aujourdhui -> null
         else -> "liste du ${Jours.enClair(soir.date)}"
     }
-    // Les séances du jour : celles du dernier soir envoyé (français, maths) et l'italien d'aujourd'hui.
+    // Les séances du jour : celles du dernier soir envoyé (français, maths) et les langues d'aujourd'hui.
     val francais = soir?.let { d.seance(it.date, Matiere.FRANCAIS) }
     val maths = soir?.let { d.seance(it.date, Matiere.MATHS) }
-    val italien = d.seance(aujourdhui, Matiere.ITALIEN)
     var aConfirmer by remember { mutableStateOf<Seance?>(null) }
     var fait by remember { mutableStateOf<String?>(null) }
 
@@ -163,15 +163,18 @@ private fun EtatsDuJour(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
         },
         onRemettreAZero = maths?.let { s -> { aConfirmer = s } },
     )
-    LigneEtat(
-        "Italien",
-        when {
-            italien != null -> etatSeance(italien, "mot", null)
-            vm.motsDuSoirItalien(profil).isEmpty() -> EtatDuJour("Pas de mot aujourd'hui", EncreDouce)
-            else -> EtatDuJour("Pas encore faite", RougeFonce)
-        },
-        onRemettreAZero = italien?.let { s -> { aConfirmer = s } },
-    )
+    for (langue in Langue.entries) {
+        val seance = d.seance(aujourdhui, langue.matiere)
+        LigneEtat(
+            langue.nom,
+            when {
+                seance != null -> etatSeance(seance, "mot", null)
+                vm.motsDuSoir(langue, profil).isEmpty() -> EtatDuJour("Pas de mot aujourd'hui", EncreDouce)
+                else -> EtatDuJour("Pas encore faite", RougeFonce)
+            },
+            onRemettreAZero = seance?.let { s -> { aConfirmer = s } },
+        )
+    }
     fait?.let {
         Spacer(Modifier.height(6.dp))
         Text(it, style = MaterialTheme.typography.bodyMedium, color = Vert)
@@ -184,7 +187,7 @@ private fun EtatsDuJour(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
             onDismissRequest = { aConfirmer = null },
             title = { Text("Remettre à zéro la séance de $nom ?") },
             text = {
-                val efface = if (s.matiere == Matiere.ITALIEN) {
+                val efface = if (Langue.depuisMatiere(s.matiere) != null) {
                     "ses réponses, ses points, les mots à revoir qu'elle avait changés et la carte postale qu'elle aurait rapportée"
                 } else {
                     "ses réponses, ses points, sa médaille et les mots à revoir qu'elle avait changés"
@@ -210,6 +213,7 @@ private fun EtatsDuJour(vm: AppViewModel, profil: Profil, d: DonneesEnfant) {
 private fun nomDeMatiere(matiere: String): String = when (matiere) {
     Matiere.MATHS -> "maths"
     Matiere.ITALIEN -> "italien"
+    Matiere.ANGLAIS -> "anglais"
     else -> "français"
 }
 
@@ -223,7 +227,7 @@ private fun etatSeance(s: Seance?, unite: String, duSoir: String?): EtatDuJour {
         else -> EtatDuJour(
             "Faite : ${pointsEnTexte(s.points)} / ${s.ordre.size}$precision",
             Vert,
-            if (s.matiere == Matiere.ITALIEN) Medaille.AUCUNE else s.medaille,
+            if (Matiere.aDesMedailles(s.matiere)) s.medaille else Medaille.AUCUNE,
         )
     }
 }
@@ -392,7 +396,13 @@ private fun LigneJour(j: JourDeSuivi) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 CaseDuJour("Français", j.francais, Modifier.weight(1f))
                 CaseDuJour("Maths", j.maths, Modifier.weight(1f))
-                CaseDuJour("Italien", j.italien, Modifier.weight(1f))
+            }
+            if (j.italien != null || j.anglais != null) {
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CaseDuJour("Italien", j.italien, Modifier.weight(1f))
+                    CaseDuJour("Anglais", j.anglais, Modifier.weight(1f))
+                }
             }
         }
     }

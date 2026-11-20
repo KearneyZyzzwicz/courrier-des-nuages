@@ -61,6 +61,7 @@ data class StatsAnnee(
     val francais: StatsMatiere = StatsMatiere(),
     val maths: StatsMatiere = StatsMatiere(),
     val italien: StatsMatiere = StatsMatiere(),
+    val anglais: StatsMatiere = StatsMatiere(),
     /** Chaque mot écrit juste est une lettre livrée, chaque calcul juste un colis trié. */
     val livraisons: Long = 0,
     /** Vrai une fois les compteurs calculés à partir des séances déjà faites. */
@@ -69,6 +70,7 @@ data class StatsAnnee(
     fun matiere(m: String): StatsMatiere = when (m) {
         Matiere.MATHS -> maths
         Matiere.ITALIEN -> italien
+        Matiere.ANGLAIS -> anglais
         else -> francais
     }
 }
@@ -91,6 +93,10 @@ object Matiere {
     const val FRANCAIS = "francais"
     const val MATHS = "maths"
     const val ITALIEN = "italien"
+    const val ANGLAIS = "anglais"
+
+    /** Les médailles sont pour le français et les maths ; les langues ont leurs cartes postales. */
+    fun aDesMedailles(matiere: String): Boolean = matiere == FRANCAIS || matiere == MATHS
 }
 
 object EtatSeance {
@@ -157,7 +163,14 @@ enum class Medaille(val cle: String) {
 }
 
 /** Un mot raté qui revient jusqu'à être réussi du premier coup deux jours de suite. */
-data class Revision(val id: String, val mot: String, val reussitesDeSuite: Int, val dernierJour: String)
+data class Revision(
+    val id: String,
+    val mot: String,
+    val reussitesDeSuite: Int,
+    val dernierJour: String,
+    /** Pour une langue : la façon de répondre choisie par le parent pour ce mot. */
+    val mode: String = "",
+)
 
 /** Un mot à revoir tel qu'il était avant une séance ([avant] null : il n'existait pas). */
 data class RevisionAvant(val cle: String, val avant: Revision?)

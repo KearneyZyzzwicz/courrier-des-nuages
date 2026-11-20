@@ -25,13 +25,13 @@ data class Ajout(
  */
 object Classement {
 
-    /** Ce que rapporte une séance terminée. Pas de médaille en italien : la récompense, c'est la carte postale. */
+    /** Ce que rapporte une séance terminée. Pas de médaille en langue : la récompense, c'est la carte postale. */
     fun pourSeance(s: Seance): Ajout = Ajout(
         matiere = s.matiere,
         points = s.points,
         possibles = s.ordre.size.toDouble(),
         livraisons = s.resultats.count { it.points > 0.0 }.toLong(),
-        medaille = if (s.matiere == Matiere.ITALIEN) Medaille.AUCUNE else s.medaille,
+        medaille = if (Matiere.aDesMedailles(s.matiere)) s.medaille else Medaille.AUCUNE,
     )
 
     /**
@@ -78,6 +78,7 @@ object Classement {
             r = when (a.matiere) {
                 Matiere.MATHS -> r.copy(maths = nouveau)
                 Matiere.ITALIEN -> r.copy(italien = nouveau)
+                Matiere.ANGLAIS -> r.copy(anglais = nouveau)
                 else -> r.copy(francais = nouveau)
             }
             r = r.copy(livraisons = r.livraisons + a.livraisons)

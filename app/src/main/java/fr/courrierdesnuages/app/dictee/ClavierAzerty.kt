@@ -97,17 +97,20 @@ fun ClavierAzerty(
             for (t in RANGEE_3) Touche(libelle(t), onClick = { ecrire(t) })
             ToucheIcone(poids = 1.5f, onClick = { if (actif) onEffacer() })
         }
-        Rangee {
-            val visibles = if (plus && accentsPlus.isNotEmpty()) accentsPlus else accents
-            for (t in visibles) Touche(libelle(t), couleur = Color(0xFFFFF4D6), onClick = { ecrire(t) })
-            if (accentsPlus.isNotEmpty()) {
-                Touche(
-                    texte = if (plus) "éèê" else "âîô",
-                    poids = 1.6f,
-                    style = styleSpeciale,
-                    couleur = CielBas,
-                    onClick = { if (actif) plus = !plus },
-                )
+        // Pas de rangée d'accents pour l'anglais.
+        if (accents.isNotEmpty() || accentsPlus.isNotEmpty()) {
+            Rangee {
+                val visibles = if (plus && accentsPlus.isNotEmpty()) accentsPlus else accents
+                for (t in visibles) Touche(libelle(t), couleur = Color(0xFFFFF4D6), onClick = { ecrire(t) })
+                if (accentsPlus.isNotEmpty()) {
+                    Touche(
+                        texte = if (plus) "éèê" else "âîô",
+                        poids = 1.6f,
+                        style = styleSpeciale,
+                        couleur = CielBas,
+                        onClick = { if (actif) plus = !plus },
+                    )
+                }
             }
         }
         Rangee {

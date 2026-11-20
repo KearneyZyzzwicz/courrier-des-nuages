@@ -17,7 +17,7 @@ import fr.courrierdesnuages.app.dictee.EcranDictee
 import fr.courrierdesnuages.app.italien.EcranAlbum
 import fr.courrierdesnuages.app.italien.EcranCartePostale
 import fr.courrierdesnuages.app.italien.EcranEpingler
-import fr.courrierdesnuages.app.italien.EcranPigeon
+import fr.courrierdesnuages.app.langues.EcranLangue
 import fr.courrierdesnuages.app.suivi.EcranClassement
 import fr.courrierdesnuages.app.suivi.EcranSuivi
 import fr.courrierdesnuages.app.suivi.EcranTournee
@@ -31,7 +31,7 @@ import fr.courrierdesnuages.app.ui.ecrans.EcranFicheEnfant
 import fr.courrierdesnuages.app.ui.ecrans.EcranNouveauCodeParent
 import fr.courrierdesnuages.app.ui.ecrans.EcranRelier
 import fr.courrierdesnuages.app.ui.parent.EcranCeSoir
-import fr.courrierdesnuages.app.ui.parent.EcranMotsItalien
+import fr.courrierdesnuages.app.ui.parent.EcranMotsLangue
 import fr.courrierdesnuages.app.ui.parent.EcranNouvelleCarte
 import fr.courrierdesnuages.app.ui.parent.EcranLectureListe
 
@@ -91,13 +91,13 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
             val s = vm.seanceCalcul
             if (s != null) EcranTriDesColis(seance = s, sons = vm.sons, onQuitter = { vm.quitterCalcul() })
         }
-        is Ecran.Pigeon -> {
-            val s = vm.seanceItalien
+        is Ecran.SeanceDeLangue -> {
+            val s = vm.seanceLangue
             if (s != null) {
-                EcranPigeon(
+                EcranLangue(
                     seance = s,
                     sons = vm.sons,
-                    onQuitter = { vm.quitterItalien() },
+                    onQuitter = { vm.quitterLangue() },
                     onOuvrirCarte = { vm.ouvrirCarteGagnee() },
                 )
             }
@@ -116,7 +116,7 @@ private fun AfficherEcran(vm: AppViewModel, e: Ecran) {
             val p = vm.profil(e.idProfil)
             if (p != null) EcranAlbum(vm, p)
         }
-        Ecran.MotsItalien -> EcranMotsItalien(vm)
+        is Ecran.MotsLangue -> EcranMotsLangue(vm, e.langue)
         Ecran.NouvelleCarte -> EcranNouvelleCarte(vm)
         is Ecran.VoirClassement -> {
             val p = vm.profil(e.idProfil)

@@ -13,16 +13,15 @@ import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.firestore
 import fr.courrierdesnuages.app.italien.CarteGagnee
 import fr.courrierdesnuages.app.italien.CartePostale
-import fr.courrierdesnuages.app.italien.MotItalien
-import fr.courrierdesnuages.app.italien.SemaineItalien
+import fr.courrierdesnuages.app.langues.Langue
+import fr.courrierdesnuages.app.langues.MOTS_PAR_JOUR
+import fr.courrierdesnuages.app.langues.ModeReponse
+import fr.courrierdesnuages.app.langues.MotLangue
+import fr.courrierdesnuages.app.langues.SemaineLangue
 import fr.courrierdesnuages.app.suivi.Ajout
 import fr.courrierdesnuages.app.suivi.RemiseAZero
 import fr.courrierdesnuages.app.suivi.parMatiere
 import kotlinx.coroutines.tasks.await
-
-const val REVISIONS_FRANCAIS = "revisions"
-const val REVISIONS_MATHS = "revisionsMaths"
-const val REVISIONS_ITALIEN = "revisionsItalien"
 
 /** Le compte familial unique qui relie chaque téléphone à la base. */
 object Compte {
@@ -54,9 +53,11 @@ object Compte {
  * profils/{id}/seances/{jour_matiere}  la séance qui compte, mot par mot
  * profils/{id}/revisions/{clé}      les mots ratés à revoir
  * profils/{id}/revisionsMaths/{clé} les calculs ratés à revoir
- * profils/{id}/revisionsItalien/{clé} les mots d'italien pas sus, qui reviennent le lendemain
- * profils/{id}/cartes/{idCarte}     les cartes postales gagnées
- * italien/{lundi}                   les 5 mots d'italien de la semaine, communs aux enfants
+ * profils/{id}/revisionsItalien/{clé} les mots d'italien pas sus, qui reviennent (de même revisionsAnglais)
+ * profils/{id}/cartes/{idCarte}     les cartes postales d'Italie gagnées
+ * profils/{id}/cartesMonde/{id}     les cartes du tour du monde anglophone
+ * profils/{id}/cartesFrance/{numéro} les cartes des départements
+ * italien/{lundi}, anglais/{lundi}  les mots de la semaine, jour par jour, communs aux enfants
  * cartes/{id}                       les cartes postales créées par le parent
  * reglages/parent                   l'empreinte du code parent
  */
@@ -105,7 +106,9 @@ class Depot {
     suspend fun supprimerProfil(id: String) {
         val ref = profilRef(id)
         ref.delete()
-        for (sous in listOf("soirs", "seances", REVISIONS_FRANCAIS, REVISIONS_MATHS, REVISIONS_ITALIEN, "cartes")) {
+        val sousCollections = listOf("soirs", "seances", REVISIONS_FRANCAIS, REVISIONS_MATHS, REVISIONS_ITALIEN, REVISIONS_ANGLAIS) +
+            COLLECTIONS_DE_CARTES
+        for (sous in sousCollections) {
             val docs = runCatching { ref.collection(sous).get().await().documents }.getOrDefault(emptyList())
             for (d in docs) d.reference.delete()
         }
@@ -235,6 +238,7 @@ class Depot {
                         mot = m["mot"] as? String ?: "",
                         reussitesDeSuite = (m["reussitesDeSuite"] as? Number)?.toInt() ?: 0,
                         dernierJour = m["dernierJour"] as? String ?: "",
+                        mode = m["mode"] as? String ?: "",
                     )
                 } else {
                     null
@@ -286,15 +290,11 @@ class Depot {
                 "mot" to (r.avant?.mot ?: ""),
                 "reussitesDeSuite" to (r.avant?.reussitesDeSuite ?: 0),
                 "dernierJour" to (r.avant?.dernierJour ?: ""),
+                "mode" to (r.avant?.mode ?: ""),
             )
         }
         lot.set(ref.collection("seances").document(seance.id), champsSeance(seance) + ("revisionsAvant" to trace))
-        for (r in revisionsAEcrire) {
-            lot.set(
-                ref.collection(collection).document(r.id),
-                mapOf("mot" to r.mot, "reussitesDeSuite" to r.reussitesDeSuite, "dernierJour" to r.dernierJour),
-            )
-        }
+        for (r in revisionsAEcrire) lot.set(ref.collection(collection).document(r.id), champsRevision(r))
         for (id in revisionsASupprimer) lot.delete(ref.collection(collection).document(id))
         lot.commit()
     }
@@ -308,12 +308,7 @@ class Depot {
         val lot = db.batch()
         val ref = profilRef(idProfil)
         lot.delete(ref.collection("seances").document(plan.idSeance))
-        for (r in plan.aRestaurer) {
-            lot.set(
-                ref.collection(collection).document(r.id),
-                mapOf("mot" to r.mot, "reussitesDeSuite" to r.reussitesDeSuite, "dernierJour" to r.dernierJour),
-            )
-        }
+        for (r in plan.aRestaurer) lot.set(ref.collection(collection).document(r.id), champsRevision(r))
         for (id in plan.aSupprimer) lot.delete(ref.collection(collection).document(id))
         val retrait = plan.retrait
         if (retrait != null) {
@@ -330,7 +325,7 @@ class Depot {
             }
             lot.update(ref, champs)
         }
-        plan.idCarte?.let { lot.delete(ref.collection("cartes").document(it)) }
+        plan.idCarte?.let { lot.delete(ref.collection(plan.collectionCarte).document(it)) }
         lot.commit()
     }
 
@@ -355,19 +350,27 @@ class Depot {
                         mot = mot,
                         reussitesDeSuite = (doc.getLong("reussitesDeSuite") ?: 0L).toInt(),
                         dernierJour = doc.getString("dernierJour").orEmpty(),
+                        mode = doc.getString("mode").orEmpty(),
                     )
                 },
             )
         }
 
-    // ---------- Italien ----------
+    private fun champsRevision(r: Revision): Map<String, Any> {
+        val champs = hashMapOf<String, Any>("mot" to r.mot, "reussitesDeSuite" to r.reussitesDeSuite, "dernierJour" to r.dernierJour)
+        if (r.mode.isNotEmpty()) champs["mode"] = r.mode
+        return champs
+    }
 
-    fun ecouterSemaineItalien(
+    // ---------- Langues : les mots de la semaine, jour par jour ----------
+
+    fun ecouterSemaine(
+        langue: Langue,
         lundi: String,
-        rappel: (SemaineItalien?) -> Unit,
+        rappel: (SemaineLangue?) -> Unit,
         erreur: (Exception) -> Unit,
     ): ListenerRegistration =
-        db.collection("italien").document(lundi).addSnapshotListener { doc, e ->
+        db.collection(langue.collectionSemaines).document(lundi).addSnapshotListener { doc, e ->
             if (e != null) {
                 erreur(e)
                 return@addSnapshotListener
@@ -376,31 +379,48 @@ class Depot {
                 rappel(null)
                 return@addSnapshotListener
             }
-            val mots = (doc.get("mots") as? List<*>).orEmpty().map { element ->
-                val m = element as? Map<*, *>
-                MotItalien(m?.get("fr") as? String ?: "", m?.get("it") as? String ?: "")
+            val jours = HashMap<Int, MutableList<MotLangue>>()
+            (doc.get("mots") as? List<*>).orEmpty().forEachIndexed { i, element ->
+                val m = element as? Map<*, *> ?: return@forEachIndexed
+                // Avant le 20 novembre : 5 mots, un par jour du lundi au vendredi, sans « jour » ni mode.
+                val jour = (m["jour"] as? Number)?.toInt() ?: (i + 1)
+                val mot = MotLangue(
+                    francais = m["fr"] as? String ?: "",
+                    traduction = m["trad"] as? String ?: m["it"] as? String ?: "",
+                    mode = ModeReponse.depuisCle(m["mode"] as? String),
+                )
+                if (jour in 1..7) jours.getOrPut(jour) { ArrayList() } += mot
             }
-            rappel(SemaineItalien(lundi, mots))
+            rappel(SemaineLangue(lundi, jours))
         }
 
-    fun enregistrerSemaineItalien(semaine: SemaineItalien) {
-        db.collection("italien").document(semaine.lundi).set(
-            mapOf(
-                "lundi" to semaine.lundi,
-                "mots" to semaine.mots.map { mapOf("fr" to Mots.normaliser(it.francais), "it" to Mots.normaliser(it.italien)) },
-                "modifieLe" to System.currentTimeMillis(),
-            ),
+    fun enregistrerSemaine(langue: Langue, semaine: SemaineLangue) {
+        val mots = (1..7).flatMap { jour ->
+            semaine.jours[jour].orEmpty().filter { it.complet }.take(MOTS_PAR_JOUR).map { mot ->
+                mapOf(
+                    "fr" to Mots.normaliser(mot.francais),
+                    "trad" to Mots.normaliser(mot.traduction),
+                    // Pour les téléphones pas encore à jour, qui lisent « it ».
+                    "it" to Mots.normaliser(mot.traduction),
+                    "jour" to jour,
+                    "mode" to mot.mode.cle,
+                )
+            }
+        }
+        db.collection(langue.collectionSemaines).document(semaine.lundi).set(
+            mapOf("lundi" to semaine.lundi, "mots" to mots, "modifieLe" to System.currentTimeMillis()),
         )
     }
 
-    // ---------- Cartes postales ----------
+    // ---------- Cartes postales gagnées (une collection par album) ----------
 
     fun ecouterCartesGagnees(
         idProfil: String,
+        collection: String,
         rappel: (List<CarteGagnee>) -> Unit,
         erreur: (Exception) -> Unit,
     ): ListenerRegistration =
-        profilRef(idProfil).collection("cartes").addSnapshotListener { instantane, e ->
+        profilRef(idProfil).collection(collection).addSnapshotListener { instantane, e ->
             if (e != null) {
                 erreur(e)
                 return@addSnapshotListener
@@ -418,8 +438,8 @@ class Depot {
             )
         }
 
-    fun enregistrerCarteGagnee(idProfil: String, carte: CarteGagnee) {
-        profilRef(idProfil).collection("cartes").document(carte.idCarte).set(
+    fun enregistrerCarteGagnee(idProfil: String, collection: String, carte: CarteGagnee) {
+        profilRef(idProfil).collection(collection).document(carte.idCarte).set(
             mapOf(
                 "semaine" to carte.semaine,
                 "gagneeLe" to carte.gagneeLe,
@@ -429,8 +449,8 @@ class Depot {
         )
     }
 
-    fun marquerEpinglee(idProfil: String, idCarte: String, bienPlacee: Boolean) {
-        profilRef(idProfil).collection("cartes").document(idCarte).set(
+    fun marquerEpinglee(idProfil: String, collection: String, idCarte: String, bienPlacee: Boolean) {
+        profilRef(idProfil).collection(collection).document(idCarte).set(
             mapOf("epinglee" to true, "bienPlacee" to bienPlacee),
             SetOptions.merge(),
         )
@@ -514,6 +534,7 @@ class Depot {
             francais = matiere(Matiere.FRANCAIS),
             maths = matiere(Matiere.MATHS),
             italien = matiere(Matiere.ITALIEN),
+            anglais = matiere(Matiere.ANGLAIS),
             livraisons = ((m["livraisons"] as? Number)?.toLong() ?: 0L).coerceAtLeast(0L),
             calcule = m["calcule"] as? Boolean ?: false,
         )
@@ -551,6 +572,7 @@ class Depot {
                     Matiere.FRANCAIS to matiere(stats.francais),
                     Matiere.MATHS to matiere(stats.maths),
                     Matiere.ITALIEN to matiere(stats.italien),
+                    Matiere.ANGLAIS to matiere(stats.anglais),
                     "livraisons" to stats.livraisons,
                     "calcule" to true,
                 ),
