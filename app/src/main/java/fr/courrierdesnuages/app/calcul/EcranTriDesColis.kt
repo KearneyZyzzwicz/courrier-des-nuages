@@ -68,6 +68,7 @@ import fr.courrierdesnuages.app.R
 import fr.courrierdesnuages.app.data.Medaille
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.DessinMedaille
+import fr.courrierdesnuages.app.dictee.texteMedaille
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
 import fr.courrierdesnuages.app.ui.composants.Carte
@@ -233,13 +234,13 @@ private fun DeroulementCalcul(seance: SeanceCalcul, sons: Sons) {
     }
 }
 
-/** Le tapis roulant sert de chrono : le colis doit être trié avant d'arriver au bout (10 s). */
+/** Le tapis roulant sert de chrono : le colis doit être trié avant d'arriver au bout (12 s). */
 @Composable
 private fun TapisRoulant(texte: String, passage: Int, onBout: () -> Unit) {
     val bout by rememberUpdatedState(onBout)
     val avance = remember(passage) { Animatable(0f) }
     LaunchedEffect(passage) {
-        avance.animateTo(1f, tween(durationMillis = CHRONO_MS, easing = LinearEasing))
+        avance.animateTo(1f, tween(durationMillis = CHRONO_TAPIS_MS, easing = LinearEasing))
         bout()
     }
     val densite = LocalDensity.current
@@ -332,7 +333,7 @@ private fun Compteur(cle: Int, onFini: () -> Unit) {
     val fini by rememberUpdatedState(onFini)
     val reste = remember(cle) { Animatable(1f) }
     LaunchedEffect(cle) {
-        reste.animateTo(0f, tween(durationMillis = CHRONO_MS, easing = LinearEasing))
+        reste.animateTo(0f, tween(durationMillis = CHRONO_CASIERS_MS, easing = LinearEasing))
         fini()
     }
     LinearProgressIndicator(
@@ -518,11 +519,8 @@ private fun ResumeCalculs(seance: SeanceCalcul, onRetour: () -> Unit) {
         if (seance.compte) {
             Text("${pointsEnTexte(seance.points)} / ${seance.ordre.size}", style = MaterialTheme.typography.displaySmall, color = Encre)
             Text(
-                when (medaille) {
-                    Medaille.OR -> "Médaille d'or : aucune erreur !"
-                    Medaille.ARGENT -> "Médaille d'argent : une seule erreur."
-                    Medaille.AUCUNE -> "Les calculs ratés reviendront les jours suivants."
-                },
+                texteMedaille(medaille, seance.ordre.size - seance.points)
+                    ?: "Les calculs ratés reviendront les jours suivants.",
                 style = MaterialTheme.typography.titleMedium,
                 color = EncreDouce,
                 textAlign = TextAlign.Center,

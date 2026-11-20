@@ -14,7 +14,11 @@ import fr.courrierdesnuages.app.data.Seance
 /** Les étapes d'un calcul : le colis avance, seconde chance aux 4 casiers, recopie. */
 enum class EtapeCalcul { TAPIS, CASIERS, RECOPIE, BRAVO, FIN }
 
-const val CHRONO_MS = 10_000
+/** Le temps du tapis roulant pour trier un colis (12 s depuis le 20 novembre, au lieu de 10). */
+const val CHRONO_TAPIS_MS = 12_000
+
+/** Le temps pour choisir parmi les 4 casiers à la seconde chance. */
+const val CHRONO_CASIERS_MS = 10_000
 
 /**
  * Le tri des colis. Si [compte] est vrai, c'est la séance qui compte : 1, 0,5 ou 0 point par calcul,
@@ -71,7 +75,7 @@ class SeanceCalcul(
     val total: Int get() = if (enRattrapage) rattrapage.size else ordre.size
     val points: Double get() = resultats.sumOf { it.points }
     val fautes: Int get() = resultats.count { it.points < 1.0 }
-    val medaille: Medaille get() = if (compte) Medaille.pour(fautes) else Medaille.AUCUNE
+    val medaille: Medaille get() = if (compte) Medaille.pour(points, ordre.size) else Medaille.AUCUNE
 
     fun taper(chiffre: Char) {
         if ((etape == EtapeCalcul.TAPIS || etape == EtapeCalcul.RECOPIE) && saisie.length < 3) {

@@ -12,13 +12,16 @@ import fr.courrierdesnuages.app.data.Profil
 import fr.courrierdesnuages.app.data.ResultatMot
 import fr.courrierdesnuages.app.data.Seance
 
-/** Les étapes d'un mot : l'avion passe, l'enfant écrit, seconde chance, recopie. */
+/**
+ * Les étapes d'un mot : l'avion passe, l'enfant écrit (deux essais), lettres mélangées, recopie.
+ */
 enum class Phase { AVION, SAISIE, SECONDE_CHANCE, RECOPIE, BRAVO, FIN }
 
 /**
  * Le déroulé d'une dictée. Si [compte] est vrai, c'est la séance qui compte : chaque mot rapporte
- * 1, 0,5 ou 0 point et la progression est enregistrée après chaque mot. Sinon c'est un
- * entraînement, sans points.
+ * 1 point s'il est juste au premier ou au deuxième essai (un deuxième essai n'est pas une faute),
+ * 0,5 avec les lettres mélangées, 0 sinon. La progression est enregistrée après chaque mot. Sinon
+ * c'est un entraînement, sans points.
  */
 class SeanceDictee(
     val profil: Profil,
@@ -50,6 +53,10 @@ class SeanceDictee(
     var message by mutableStateOf<String?>(null)
         private set
 
+    /** 1 pour le premier essai au clavier, 2 pour le deuxième. */
+    var essai by mutableStateOf(1)
+        private set
+
     /** Seconde chance : les lettres posées et celles qui restent (par leur position dans le tirage). */
     var tirage by mutableStateOf<List<Char>>(emptyList())
         private set
@@ -75,7 +82,7 @@ class SeanceDictee(
     val total: Int get() = if (enRattrapage) rattrapage.size else ordre.size
     val points: Double get() = resultats.sumOf { it.points }
     val fautes: Int get() = resultats.count { it.points < 1.0 }
-    val medaille: Medaille get() = if (compte) Medaille.pour(fautes) else Medaille.AUCUNE
+    val medaille: Medaille get() = if (compte) Medaille.pour(points, ordre.size) else Medaille.AUCUNE
 
     /** L'avion est sorti de l'écran : l'enfant peut écrire. */
     fun avionPasse() {
@@ -103,13 +110,17 @@ class SeanceDictee(
                 if (Mots.identiques(saisie, mot)) {
                     noter(1.0)
                     bravo(1.0)
+                } else if (essai == 1) {
+                    // Deuxième essai, sans que ce soit une faute : l'enfant relit et corrige.
+                    essai = 2
+                    message = "Presque ! Relis ton mot et corrige-le."
                 } else if (enRattrapage) {
                     passerALaRecopie()
                 } else {
                     phase = Phase.SECONDE_CHANCE
                     tirage = Mots.melanger(mot)
                     posees.clear()
-                    message = "Presque ! Remets les lettres dans l'ordre."
+                    message = "Remets les lettres dans l'ordre."
                 }
             }
             Phase.RECOPIE -> {
@@ -202,6 +213,7 @@ class SeanceDictee(
     private fun suivant() {
         saisie = ""
         message = null
+        essai = 1
         posees.clear()
         tirage = emptyList()
         index += 1

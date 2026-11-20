@@ -44,12 +44,19 @@ import fr.courrierdesnuages.app.ui.theme.Rouge
 import fr.courrierdesnuages.app.ui.theme.Vert
 
 /** Une matière telle qu'elle apparaît dans les classements. */
-internal data class MatiereAffichee(val cle: String, val nom: String, val symbole: String, val couleur: Color)
+internal data class MatiereAffichee(
+    val cle: String,
+    val nom: String,
+    val symbole: String,
+    val couleur: Color,
+    /** Les médailles sont pour le français et les maths ; les langues ont leurs cartes postales. */
+    val medailles: Boolean,
+)
 
 internal val MATIERES_AFFICHEES = listOf(
-    MatiereAffichee(Matiere.FRANCAIS, "Français", "Aa", Rouge),
-    MatiereAffichee(Matiere.MATHS, "Maths", "+×", Vert),
-    MatiereAffichee(Matiere.ITALIEN, "Italien", "Ciao", Jaune),
+    MatiereAffichee(Matiere.FRANCAIS, "Français", "Aa", Rouge, medailles = true),
+    MatiereAffichee(Matiere.MATHS, "Maths", "+×", Vert, medailles = true),
+    MatiereAffichee(Matiere.ITALIEN, "Italien", "Ciao", Jaune, medailles = false),
 )
 
 /** Les classements de l'année, et la collection de médailles de l'enfant. */
@@ -105,34 +112,30 @@ private fun CollectionDeMedailles(profil: Profil) {
         Text("Ma collection de médailles", style = MaterialTheme.typography.titleLarge)
         val francais = profil.medaillesDe(Matiere.FRANCAIS)
         val maths = profil.medaillesDe(Matiere.MATHS)
-        if (francais.or + francais.argent + maths.or + maths.argent == 0L) {
+        if (francais.total + maths.total == 0L) {
             Spacer(Modifier.height(6.dp))
             Text(
-                "Pas encore de médaille. Une séance sans faute rapporte l'or, une seule faute l'argent.",
+                "Pas encore de médaille. Tous les points rapportent l'or ; s'il manque un point, c'est l'argent, " +
+                    "et s'il en manque deux, le bronze.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = EncreDouce,
             )
         } else {
             Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                ColonneMedailles("Français", francais)
-                ColonneMedailles("Maths", maths)
-            }
+            LigneMedailles("Français", francais)
+            Spacer(Modifier.height(6.dp))
+            LigneMedailles("Maths", maths)
         }
     }
 }
 
 @Composable
-private fun ColonneMedailles(titre: String, stats: MedaillesGagnees) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(titre, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            DessinMedaille(Medaille.OR, Modifier.size(46.dp))
-            Text("× ${stats.or}", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.width(12.dp))
-            DessinMedaille(Medaille.ARGENT, Modifier.size(46.dp))
-            Text("× ${stats.argent}", style = MaterialTheme.typography.titleMedium)
+private fun LigneMedailles(titre: String, stats: MedaillesGagnees) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(titre, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(84.dp))
+        for ((medaille, nombre) in listOf(Medaille.OR to stats.or, Medaille.ARGENT to stats.argent, Medaille.BRONZE to stats.bronze)) {
+            DessinMedaille(medaille, Modifier.size(40.dp))
+            Text("× $nombre", style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(48.dp))
         }
     }
 }
@@ -180,13 +183,13 @@ private fun LignePlace(place: Classement.Place<Profil>, matiere: MatiereAffichee
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = if (estMoi) FontWeight.Bold else null,
                 )
-                if (matiere.cle != Matiere.ITALIEN && stats.or + stats.argent > 0) {
+                if (matiere.medailles && stats.or + stats.argent + stats.bronze > 0) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        DessinMedaille(Medaille.OR, Modifier.size(20.dp))
-                        Text("${stats.or}", style = MaterialTheme.typography.bodySmall, color = EncreDouce)
-                        Spacer(Modifier.width(6.dp))
-                        DessinMedaille(Medaille.ARGENT, Modifier.size(20.dp))
-                        Text("${stats.argent}", style = MaterialTheme.typography.bodySmall, color = EncreDouce)
+                        for ((medaille, nombre) in listOf(Medaille.OR to stats.or, Medaille.ARGENT to stats.argent, Medaille.BRONZE to stats.bronze)) {
+                            DessinMedaille(medaille, Modifier.size(20.dp))
+                            Text("$nombre", style = MaterialTheme.typography.bodySmall, color = EncreDouce)
+                            Spacer(Modifier.width(6.dp))
+                        }
                     }
                 } else {
                     Text(p.classe, style = MaterialTheme.typography.bodySmall, color = EncreDouce)

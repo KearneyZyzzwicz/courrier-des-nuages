@@ -41,7 +41,9 @@ data class Profil(
     fun medaillesDe(matiere: String): MedaillesGagnees = medailles[matiere] ?: MedaillesGagnees()
 }
 
-data class MedaillesGagnees(val or: Long = 0, val argent: Long = 0)
+data class MedaillesGagnees(val or: Long = 0, val argent: Long = 0, val bronze: Long = 0) {
+    val total: Long get() = or + argent + bronze
+}
 
 /** Points obtenus et points possibles d'une matière sur l'année scolaire, et médailles gagnées. */
 data class StatsMatiere(
@@ -49,6 +51,7 @@ data class StatsMatiere(
     val possibles: Double = 0.0,
     val or: Long = 0,
     val argent: Long = 0,
+    val bronze: Long = 0,
 ) {
     /** Le pourcentage de réussite, ou null tant qu'aucun jour n'a compté. */
     val pourcentage: Double? get() = if (possibles > 0.0) points * 100.0 / possibles else null
@@ -110,12 +113,17 @@ data class Seance(
      * remettre à zéro. Null pour une séance finie avant que cette trace soit gardée.
      */
     val revisionsAvant: List<RevisionAvant>? = null,
+    /**
+     * La médaille enregistrée à la fin de la séance, avec la règle de ce moment-là : une séance
+     * finie avant le changement de règle garde sa médaille.
+     */
+    val medailleEnregistree: Medaille? = null,
 ) {
     val id: String get() = idSeance(soir, matiere)
     val terminee: Boolean get() = etat == EtatSeance.TERMINEE
     val points: Double get() = resultats.sumOf { it.points }
     val fautes: Int get() = resultats.count { it.points < 1.0 }
-    val medaille: Medaille get() = if (!terminee) Medaille.AUCUNE else Medaille.pour(fautes)
+    val medaille: Medaille get() = if (!terminee) Medaille.AUCUNE else medailleEnregistree ?: Medaille.pour(points, ordre.size)
 
     companion object {
         fun idSeance(soir: String, matiere: String) = "${soir}_$matiere"
@@ -125,15 +133,26 @@ data class Seance(
 enum class Medaille(val cle: String) {
     OR("or"),
     ARGENT("argent"),
+    BRONZE("bronze"),
     AUCUNE("");
 
     companion object {
-        /** Or : aucune faute. Argent : une seule faute. */
-        fun pour(fautes: Int): Medaille = when (fautes) {
-            0 -> OR
-            1 -> ARGENT
-            else -> AUCUNE
+        /**
+         * Depuis le 20 novembre 2026 : or avec tous les points, argent s'il manque un point au plus,
+         * bronze s'il en manque deux au plus.
+         */
+        fun pour(points: Double, total: Int): Medaille {
+            if (total <= 0) return AUCUNE
+            val manque = total - points
+            return when {
+                manque <= 0.001 -> OR
+                manque <= 1.001 -> ARGENT
+                manque <= 2.001 -> BRONZE
+                else -> AUCUNE
+            }
         }
+
+        fun depuisCle(cle: String?): Medaille? = entries.firstOrNull { it.cle == cle }
     }
 }
 

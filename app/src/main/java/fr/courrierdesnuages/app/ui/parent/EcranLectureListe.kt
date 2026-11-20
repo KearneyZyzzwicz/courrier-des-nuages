@@ -119,7 +119,7 @@ fun EcranLectureListe(vm: AppViewModel, profil: Profil, image: String?) {
                 Carte(Modifier.fillMaxWidth()) {
                     Text("Vérifie chaque mot", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        "Accents, majuscules et déterminant comptent : écris « une école » si la feuille dit « une école ».",
+                        "Accents et déterminant comptent (pas les majuscules) : écris « une école » si la feuille dit « une école ».",
                         style = MaterialTheme.typography.bodyMedium,
                         color = EncreDouce,
                     )
