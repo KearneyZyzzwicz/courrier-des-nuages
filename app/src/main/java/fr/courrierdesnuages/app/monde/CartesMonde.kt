@@ -4,8 +4,8 @@ package fr.courrierdesnuages.app.monde
 enum class Continent { EUROPE, AMERIQUE, CARAIBES, AFRIQUE, ASIE, OCEANIE }
 
 /**
- * Une carte postale du tour du monde anglophone, rapportée par l'albatros voyageur après une
- * semaine d'anglais sans faute. [pays] est le code du pays sur la carte du monde (Natural Earth).
+ * Une carte postale du tour du monde des pays anglophones, rapportée par Mister Owl (le hibou facteur
+ * de nuit, dans son bus) après une semaine d'anglais sans faute. [pays] est le code du pays sur la carte du monde (Natural Earth).
  */
 data class CarteMonde(
     val id: String,

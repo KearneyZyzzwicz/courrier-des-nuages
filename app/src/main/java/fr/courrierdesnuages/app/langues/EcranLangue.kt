@@ -35,6 +35,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,7 +65,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.courrierdesnuages.app.R
-import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.data.pointsEnTexte
 import fr.courrierdesnuages.app.dictee.ClavierAzerty
 import fr.courrierdesnuages.app.son.Sons
@@ -84,7 +85,7 @@ import kotlin.math.roundToInt
 private val Papier = Color(0xFFFFF6DE)
 private val PapierFonce = Color(0xFFE9D9AF)
 
-/** Le messager de chaque langue : il apporte le message, roulé dans le tube attaché à sa patte. */
+/** Le messager de chaque langue : il apporte le message roulé (le pigeon voyageur, ou Mister Owl dans son bus de nuit). */
 data class Messager(
     val nom: String,
     @param:DrawableRes val image: Int,
@@ -101,7 +102,7 @@ fun couleurDe(langue: Langue): Color = when (langue) {
 
 fun messagerDe(langue: Langue): Messager = when (langue) {
     Langue.ITALIEN -> Messager("Le pigeon voyageur", R.drawable.pigeon, "une carte postale d'Italie", "Bravissimo !")
-    Langue.ANGLAIS -> Messager("L'albatros voyageur", R.drawable.albatros, "une carte postale du tour du monde", "Well done!")
+    Langue.ANGLAIS -> Messager("Mister Owl", R.drawable.mister_owl, "une carte postale du tour du monde des pays anglophones", "Well done!")
 }
 
 /** La séance d'une langue : le messager apporte le mot, l'enfant répond selon le mode choisi par le parent. */
@@ -157,7 +158,7 @@ fun EcranLangue(seance: SeanceLangue, sons: Sons, onQuitter: () -> Unit, onOuvri
     if (confirmerArret) {
         AlertDialog(
             onDismissRequest = { confirmerArret = false },
-            title = { Text("Arrêter ${messager.nom.replaceFirstChar { it.lowercase() }} ?") },
+            title = { Text("Arrêter la séance ${seance.langue.deLaLangue} ?") },
             text = {
                 Text(
                     if (seance.compte && !seance.enRattrapage) {
@@ -202,7 +203,7 @@ private fun Deroulement(seance: SeanceLangue, messager: Messager, sons: Sons) {
                 )
                 else -> MessageDeroule(
                     francais = seance.mot.francais,
-                    traduction = if (etape == EtapeLangue.RECOPIE) seance.mot.traduction else null,
+                    traduction = if (etape == EtapeLangue.RECOPIE) seance.mot.aEcrire else null,
                     langue = seance.langue,
                 )
             }
@@ -392,11 +393,12 @@ private fun MessageDeroule(francais: String, traduction: String?, langue: Langue
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text("En français", style = MaterialTheme.typography.labelMedium, color = EncreDouce)
-                Text(
+                // Une petite phrase rapetisse pour tenir sur deux lignes au plus.
+                BasicText(
                     francais,
-                    style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 32.sp, color = Encre),
-                    maxLines = 1,
-                    softWrap = false,
+                    style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, color = Encre, textAlign = TextAlign.Center),
+                    maxLines = 2,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = 32.sp, stepSize = 1.sp),
                 )
             }
         }
@@ -433,11 +435,12 @@ private fun Ardoise(texte: String, juste: Boolean, actif: Boolean) {
     ) {
         Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
+                BasicText(
                     texte,
-                    style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, fontSize = 32.sp, color = if (juste) Vert else Encre),
+                    style = TextStyle(fontFamily = Andika, fontWeight = FontWeight.Bold, color = if (juste) Vert else Encre),
                     maxLines = 1,
-                    softWrap = false,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = 32.sp, stepSize = 1.sp),
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 if (actif) {
                     Box(
@@ -459,7 +462,7 @@ private fun Ardoise(texte: String, juste: Boolean, actif: Boolean) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Cases(seance: SeanceLangue) {
-    val modele = Mots.normaliser(seance.mot.traduction)
+    val modele = seance.mot.aEcrire
     val lettres = seance.posees.map { seance.tirage[it] }
     FlowRow(
         modifier = Modifier

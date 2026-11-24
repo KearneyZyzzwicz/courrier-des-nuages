@@ -39,6 +39,10 @@ data class Profil(
     val medailles: Map<String, MedaillesGagnees> = emptyMap(),
     /** L'engin du hangar choisi pour le facteur (null : l'engin de départ de l'avatar). */
     val engin: String? = null,
+    /** Les pièces du hangar offertes par le parent (elles s'ajoutent aux médailles d'or de maths). */
+    val piecesOffertes: Long = 0,
+    /** Les pièces offertes que l'enfant a déjà vues : les autres l'attendent sur son accueil. */
+    val piecesOffertesVues: Long = 0,
 ) {
     fun medaillesDe(matiere: String): MedaillesGagnees = medailles[matiere] ?: MedaillesGagnees()
 }

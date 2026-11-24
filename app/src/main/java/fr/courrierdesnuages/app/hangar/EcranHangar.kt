@@ -346,3 +346,35 @@ fun EcranHangar(vm: AppViewModel, profil: Profil) {
         }
     }
 }
+
+/** La pièce offerte par le parent, qui attendait l'enfant sur son accueil. */
+@Composable
+fun EcranPieceOfferte(vm: AppViewModel, profil: Profil) {
+    val np = Hangar.nouvellePiece(profil.piecesDuHangar)
+    val nombre = (profil.piecesOffertes - profil.piecesOffertesVues).coerceAtLeast(1)
+    Column(Modifier.fillMaxSize()) {
+        BarreRetour("Un cadeau pour toi", onRetour = { vm.retour() })
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            AvatarAnime(profil.avatar, taille = 130.dp, engin = profil.enginDuFacteur)
+            Text(
+                if (nombre > 1) "Tes parents t'offrent $nombre pièces pour ton hangar !" else "Tes parents t'offrent une pièce pour ton hangar !",
+                style = MaterialTheme.typography.titleLarge,
+                color = Encre,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(vertical = 10.dp),
+            )
+            if (np != null) {
+                CarteNouvellePiece(np, profil.avatar, onHangar = { vm.voirPiecesOffertes(profil) })
+            } else {
+                BoutonPrincipal(texte = "Voir mon hangar", onClick = { vm.voirPiecesOffertes(profil) }, modifier = Modifier.fillMaxWidth())
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}

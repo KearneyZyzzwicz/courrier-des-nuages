@@ -371,8 +371,12 @@ private fun CarteHangar(profil: Profil) {
         val pieces = profil.piecesDuHangar
         val construits = Hangar.construits(pieces).size
         Text("Hangar des engins : $construits sur ${ENGINS.size}", style = MaterialTheme.typography.titleLarge)
+        val offertes = profil.piecesOffertes.coerceAtLeast(0)
+        val medailles = pieces - offertes
         Text(
-            "$pieces médaille${if (pieces > 1) "s" else ""} d'or en maths, une pièce chacune ; 5 pièces font un engin." +
+            "$medailles médaille${if (medailles > 1) "s" else ""} d'or en maths, une pièce chacune" +
+                (if (offertes > 0) ", et $offertes pièce${if (offertes > 1) "s" else ""} offerte${if (offertes > 1) "s" else ""}" else "") +
+                " ; 5 pièces font un engin." +
                 (profil.enginDuFacteur?.let { " Engin choisi : ${it.nom.replaceFirstChar { c -> c.lowercase() }}." } ?: ""),
             style = MaterialTheme.typography.bodyMedium,
             color = EncreDouce,

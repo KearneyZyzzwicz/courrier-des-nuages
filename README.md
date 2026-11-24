@@ -20,7 +20,7 @@ multiplication, mots d'italien et d'anglais. Chaque enfant a son profil, son ava
 
 - Polices [Fredoka](https://fonts.google.com/specimen/Fredoka) et [Andika](https://software.sil.org/andika/)
   (SIL Open Font License, voir `app/src/main/assets/licences`).
-- Illustrations (avatars, pigeon, albatros, avion, cartes postales, engins du hangar) créées pour le projet.
+- Illustrations (avatars, pigeon, Mister Owl et son bus de nuit, avion, cartes postales, engins du hangar) créées pour le projet.
 - Carte de l'Italie : limites des régions de l'[ISTAT](https://www.istat.it/) (licence CC BY),
   via [openpolis/geojson-italy](https://github.com/openpolis/geojson-italy), simplifiées pour l'appli.
 - Carte des départements de France : IGN, Admin Express COG 2018 (Licence ouverte Etalab), via
