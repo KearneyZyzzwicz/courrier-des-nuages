@@ -79,7 +79,7 @@ import kotlin.math.min
 
 private val Trait = Color(0xFFD9D2C3)
 
-/** Les pays du tour du monde, en couleur pâle sur la carte : c'est là que l'albatros se pose. */
+/** Les pays du tour du monde, en couleur pâle sur la carte : c'est là que le bus de Mister Owl se pose. */
 private val TerreAnglophone = Color(0xFFE6EEF7)
 
 fun couleurDe(continent: Continent): Color = when (continent) {
@@ -212,7 +212,7 @@ fun RectoMonde(c: CarteMonde, atlas: Atlas, modifier: Modifier = Modifier) {
     }
 }
 
-/** Le verso : le petit mot de l'albatros voyageur, le mot d'anglais, le timbre et l'adresse. */
+/** Le verso : le petit mot de Mister Owl, le mot d'anglais, le timbre et l'adresse. */
 @Composable
 fun VersoMonde(c: CarteMonde, prenom: String, gagneeLe: Long, modifier: Modifier = Modifier) {
     Surface(
@@ -245,7 +245,7 @@ fun VersoMonde(c: CarteMonde, prenom: String, gagneeLe: Long, modifier: Modifier
                 )
             }
             Spacer(Modifier.height(10.dp))
-            Text("Ton ami,\nl'Albatros voyageur", style = MaterialTheme.typography.bodyLarge)
+            Text("Your friend,\nMister Owl", style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(8.dp))
             Text(c.legende, style = MaterialTheme.typography.labelMedium, color = EncreDouce)
             Spacer(Modifier.height(12.dp))
@@ -324,7 +324,7 @@ fun EcranEpinglerMonde(vm: AppViewModel, profil: Profil, c: CarteMonde) {
     )
 }
 
-/** Le tour du monde anglophone : les pays se colorient au fil des cartes placées. */
+/** Le tour du monde des pays anglophones : les pays se colorient au fil des cartes placées. */
 @Composable
 fun EcranAlbumMonde(vm: AppViewModel, profil: Profil) {
     val atlas = rememberAtlasMonde()
@@ -334,16 +334,17 @@ fun EcranAlbumMonde(vm: AppViewModel, profil: Profil) {
         .sortedBy { ordre.indexOf(it.first.id) }
     EcranAlbumAtlas(
         titre = "Mon tour du monde",
+        sousTitre = "Le tour du monde des pays anglophones",
         atlas = atlas,
         gagnees = gagnees.map { (c, g) -> c.lieu() to g },
         total = TOUR_DU_MONDE.size,
-        texteVide = "Pas encore de carte. Une semaine d'anglais sans faute, et l'albatros t'en apportera une !",
-        texteComplet = "Bravo ! Tu as les ${TOUR_DU_MONDE.size} cartes : tu as fait le tour du monde anglophone !",
+        texteVide = "Pas encore de carte. Une semaine d'anglais sans faute, et Mister Owl t'en apportera une !",
+        texteComplet = "Bravo ! Tu as les ${TOUR_DU_MONDE.size} cartes : tu as fait le tour du monde des pays anglophones !",
         texteBoutonPlacer = { l -> "Placer la carte de ${carteMonde(l.id)?.ville ?: ""}".trim() },
         fondDe = { id -> if (id in PAYS_DU_TOUR) TerreAnglophone else TerreVierge },
         nomDeForme = { id ->
             if (id in PAYS_DU_TOUR) {
-                TOUR_DU_MONDE.first { it.pays == id }.let { "${it.drapeau} ${it.nomPays} : l'albatros n'y est pas encore allé avec toi." }
+                TOUR_DU_MONDE.first { it.pays == id }.let { "${it.drapeau} ${it.nomPays} : Mister Owl n'y est pas encore allé avec toi." }
             } else {
                 null
             }
@@ -352,6 +353,5 @@ fun EcranAlbumMonde(vm: AppViewModel, profil: Profil) {
         onOuvrir = { l -> vm.ouvrirCarteMonde(profil, l.id, nouvelle = false) },
         onPlacer = { l -> vm.ouvrirEpingleMonde(profil, l.id) },
         onRetour = { vm.retour() },
-        credit = "Carte du monde : Natural Earth (domaine public).",
     )
 }

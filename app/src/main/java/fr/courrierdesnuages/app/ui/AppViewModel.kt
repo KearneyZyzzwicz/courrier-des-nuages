@@ -40,7 +40,10 @@ import fr.courrierdesnuages.app.data.Seance
 import fr.courrierdesnuages.app.data.Soir
 import fr.courrierdesnuages.app.dictee.SeanceDictee
 import fr.courrierdesnuages.app.france.DEPARTEMENTS
+import fr.courrierdesnuages.app.france.Departement
+import fr.courrierdesnuages.app.france.deLaVille
 import fr.courrierdesnuages.app.hangar.Hangar
+import fr.courrierdesnuages.app.hangar.NouvellePiece
 import fr.courrierdesnuages.app.hangar.piecesDuHangar
 import fr.courrierdesnuages.app.italien.CARTES_INTEGREES
 import fr.courrierdesnuages.app.italien.CarteGagnee
@@ -55,6 +58,7 @@ import fr.courrierdesnuages.app.langues.SeanceLangue
 import fr.courrierdesnuages.app.langues.SemaineLangue
 import fr.courrierdesnuages.app.maj.MiseAJour
 import fr.courrierdesnuages.app.maj.NouvelleVersion
+import fr.courrierdesnuages.app.monde.CarteMonde
 import fr.courrierdesnuages.app.monde.TOUR_DU_MONDE
 import fr.courrierdesnuages.app.son.Sons
 import fr.courrierdesnuages.app.son.Voix
@@ -91,7 +95,17 @@ sealed interface Ecran {
     data class EpinglerMonde(val idProfil: String, val id: String) : Ecran
     data class AlbumMonde(val idProfil: String) : Ecran
     data class VoirHangar(val idProfil: String) : Ecran
-    data class MotsLangue(val langue: Langue) : Ecran
+    data class PieceOfferte(val idProfil: String) : Ecran
+    data class MotsLangue(val langue: Langue, val lundi: String? = null) : Ecran
+
+    /** Lecture d'une liste de mots de langue : une image (photo ou image enregistrée) ou un texte (fichier .txt ou collé). */
+    data class ImportLangue(
+        val langue: Langue,
+        val lundi: String,
+        val image: String? = null,
+        val fichierTexte: String? = null,
+        val texte: String? = null,
+    ) : Ecran
     data object NouvelleCarte : Ecran
     data class VoirClassement(val idProfil: String) : Ecran
     data class Tournee(val idProfil: String) : Ecran
@@ -100,6 +114,16 @@ sealed interface Ecran {
 
 /** Une carte offerte par le parent n'appartient à aucune semaine (elle n'empêche pas d'en gagner une). */
 const val SEMAINE_OFFERTE = "offerte"
+
+/** « de la Haute-Marne », « du Finistère », « de l'Ain », « des Landes », « de Paris », « du tapis volant ». */
+fun deLeNom(leNom: String): String = when {
+    leNom.startsWith("le ", ignoreCase = true) -> "du " + leNom.drop(3)
+    leNom.startsWith("les ", ignoreCase = true) -> "des " + leNom.drop(4)
+    leNom.startsWith("la ", ignoreCase = true) -> "de la " + leNom.drop(3)
+    leNom.startsWith("l'", ignoreCase = true) || leNom.startsWith("l’", ignoreCase = true) -> "de l'" + leNom.drop(2)
+    leNom.firstOrNull()?.uppercaseChar() in "AEIOUYÉÈÊÂÎÔ".toSet() -> "d'$leNom"
+    else -> "de $leNom"
+}
 
 /** Les séances et les soirs d'un enfant depuis la rentrée, pour le suivi parent. */
 data class AnneeSuivie(val idProfil: String, val seances: List<Seance>, val soirs: List<Soir>)
@@ -161,7 +185,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var seanceCalcul by mutableStateOf<SeanceCalcul?>(null)
         private set
 
-    // Séance de langue en cours (le pigeon voyageur pour l'italien, l'albatros pour l'anglais)
+    // Séance de langue en cours (le pigeon voyageur pour l'italien, Mister Owl pour l'anglais)
     var seanceLangue by mutableStateOf<SeanceLangue?>(null)
         private set
 
@@ -325,6 +349,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.EpinglerMonde -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.AlbumMonde -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.VoirHangar -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
+            is Ecran.PieceOfferte -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.VoirClassement -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Tournee -> if (profil(e.idProfil) == null) ecran = Ecran.ChoixProfil
             is Ecran.Suivi -> if (profil(e.idProfil) == null) ecran = Ecran.EspaceParent
@@ -449,9 +474,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             is Ecran.EpinglerMonde -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.AlbumMonde -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.VoirHangar -> Ecran.AccueilEnfant(e.idProfil)
+            is Ecran.PieceOfferte -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.VoirClassement -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Tournee -> Ecran.AccueilEnfant(e.idProfil)
             is Ecran.Suivi -> Ecran.EspaceParent
+            is Ecran.ImportLangue -> Ecran.MotsLangue(e.langue, e.lundi)
             is Ecran.MotsLangue, Ecran.NouvelleCarte -> Ecran.EspaceParent
             else -> Ecran.ChoixProfil
         }
@@ -1103,6 +1130,65 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         messageParent = "La carte de ${choisie.ville} attend ${profil.prenom} sur son accueil."
     }
 
+    /** Les départements dont l'enfant n'a pas encore la carte. */
+    fun departementsAGagner(idProfil: String): List<Departement> {
+        val gagnees = donnees(idProfil).cartesFrance.map { it.idCarte }.toSet()
+        return DEPARTEMENTS.filter { it.code !in gagnees }
+    }
+
+    /** Les cartes du tour du monde que l'enfant n'a pas encore. */
+    fun cartesMondeAGagner(idProfil: String): List<CarteMonde> {
+        val gagnees = donnees(idProfil).cartesMonde.map { it.idCarte }.toSet()
+        return TOUR_DU_MONDE.filter { it.id !in gagnees }
+    }
+
+    /** Le parent offre la carte d'un département (au hasard parmi ceux que l'enfant n'a pas, ou un département choisi). */
+    fun offrirDepartement(profil: Profil, choisi: Departement?) {
+        val d = choisi ?: RecompenseLangue.tirer(DEPARTEMENTS, { it.code }, donnees(profil.id).cartesFrance) ?: return
+        depot.enregistrerCarteGagnee(
+            profil.id,
+            CARTES_FRANCE,
+            CarteGagnee(d.code, SEMAINE_OFFERTE, System.currentTimeMillis(), epinglee = false, bienPlacee = false),
+        )
+        messageParent = "La carte ${deLeNom(d.leNom)} attend ${profil.prenom} sur son accueil."
+    }
+
+    /** Le parent offre une carte du tour du monde (au hasard, ou une carte choisie). */
+    fun offrirCarteMonde(profil: Profil, choisie: CarteMonde?) {
+        val c = choisie ?: RecompenseLangue.tirer(TOUR_DU_MONDE, { it.id }, donnees(profil.id).cartesMonde) ?: return
+        depot.enregistrerCarteGagnee(
+            profil.id,
+            CARTES_MONDE,
+            CarteGagnee(c.id, SEMAINE_OFFERTE, System.currentTimeMillis(), epinglee = false, bienPlacee = false),
+        )
+        messageParent = "La carte ${deLaVille(c.ville)} attend ${profil.prenom} sur son accueil."
+    }
+
+    /** La prochaine pièce du hangar d'un enfant (null quand tout le hangar est construit). */
+    fun prochainePiece(profil: Profil): NouvellePiece? = Hangar.nouvellePiece(profil.piecesDuHangar + 1)
+
+    /** Le parent offre la prochaine pièce du hangar. */
+    fun offrirPiece(profil: Profil) {
+        val np = prochainePiece(profil)
+        if (np == null) {
+            messageParent = "Le hangar de ${profil.prenom} est déjà complet."
+            return
+        }
+        depot.offrirPiece(profil.id)
+        messageParent = "La pièce « ${np.piece} » ${deLeNom(np.engin.nom)} attend ${profil.prenom} sur son accueil."
+    }
+
+    /** L'enfant ouvre la pièce offerte qui l'attendait sur son accueil. */
+    fun ouvrirPieceOfferte(profil: Profil) {
+        ecran = Ecran.PieceOfferte(profil.id)
+    }
+
+    /** L'enfant a vu ses pièces offertes : elles ne l'attendent plus, et il va voir son hangar. */
+    fun voirPiecesOffertes(profil: Profil) {
+        depot.voirPiecesOffertes(profil.id, profil.piecesOffertes)
+        ecran = Ecran.VoirHangar(profil.id)
+    }
+
     /** Les cartes qu'un enfant n'a pas encore. */
     fun cartesAGagner(idProfil: String): List<CartePostale> {
         val gagnees = donnees(idProfil).cartesGagnees.map { it.idCarte }.toSet()
@@ -1214,7 +1300,35 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun ouvrirMotsLangue(langue: Langue) {
         messageParent = null
+        messageMotsLangue = null
         ecran = Ecran.MotsLangue(langue)
+    }
+
+    /** Message affiché en haut de la préparation des mots (après un import). */
+    var messageMotsLangue by mutableStateOf<String?>(null)
+        private set
+
+    /** Ouvre la lecture d'une liste de mots : photo, image enregistrée, fichier texte ou texte collé. */
+    fun ouvrirImportLangue(langue: Langue, lundi: String, image: String? = null, fichierTexte: String? = null, texte: String? = null) {
+        messageMotsLangue = null
+        ecran = Ecran.ImportLangue(langue, lundi, image, fichierTexte, texte)
+    }
+
+    /**
+     * Ajoute les mots lus à la semaine, après ceux déjà prévus chaque jour, et l'enregistre ; puis
+     * revient à la préparation de cette semaine pour vérifier ou changer la façon de répondre.
+     */
+    fun ajouterMotsImportes(langue: Langue, lundi: String, ajouts: Map<Int, List<MotLangue>>, resume: String) {
+        val avant = semaine(langue, lundi)
+        val jours = (1..7).associateWith { j -> avant?.jours?.get(j).orEmpty() + ajouts[j].orEmpty() }
+            .filterValues { it.isNotEmpty() }
+        depot.enregistrerSemaine(langue, SemaineLangue(lundi, jours))
+        messageMotsLangue = resume
+        ecran = Ecran.MotsLangue(langue, lundi)
+    }
+
+    fun oublierMessageMotsLangue() {
+        messageMotsLangue = null
     }
 
     fun enregistrerMotsLangue(langue: Langue, semaines: List<SemaineLangue>) {

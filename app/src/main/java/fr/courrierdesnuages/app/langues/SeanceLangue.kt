@@ -166,7 +166,7 @@ class SeanceLangue(
         if (saisie.isBlank()) return
         when (etape) {
             EtapeLangue.SAISIE -> when {
-                Mots.identiques(saisie, mot.traduction) -> {
+                mot.accepte(saisie) -> {
                     noter(1.0)
                     bravo(1.0)
                 }
@@ -182,7 +182,7 @@ class SeanceLangue(
                 }
             }
             EtapeLangue.RECOPIE -> {
-                if (Mots.identiques(saisie, mot.traduction)) suivant() else message = "Pas encore : regarde bien chaque lettre."
+                if (mot.accepte(saisie)) suivant() else message = "Pas encore : regarde bien chaque lettre."
             }
             else -> Unit
         }
@@ -191,7 +191,7 @@ class SeanceLangue(
     // ---------- Les lettres mélangées ----------
 
     private fun preparerLettres() {
-        tirage = Mots.melanger(mot.traduction, hasard)
+        tirage = Mots.melanger(mot.aEcrire, hasard)
         posees.clear()
         etape = EtapeLangue.LETTRES
     }
@@ -210,7 +210,7 @@ class SeanceLangue(
         val lettres = posees.map { tirage[it] }
         val sortie = StringBuilder()
         var i = 0
-        for (c in Mots.normaliser(mot.traduction)) {
+        for (c in mot.aEcrire) {
             if (c == ' ') {
                 sortie.append(' ')
             } else if (i < lettres.size) {
@@ -223,7 +223,7 @@ class SeanceLangue(
 
     fun validerTuiles() {
         if (etape != EtapeLangue.LETTRES || posees.size < tirage.size) return
-        val juste = Mots.identiques(motReconstruit(), mot.traduction)
+        val juste = Mots.identiques(motReconstruit(), mot.aEcrire)
         when {
             juste && lettresDuPremierCoup -> {
                 noter(1.0)

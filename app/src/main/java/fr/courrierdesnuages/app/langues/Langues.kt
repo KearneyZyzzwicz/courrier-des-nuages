@@ -72,6 +72,29 @@ data class MotLangue(val francais: String, val traduction: String, val mode: Mod
 /** Au plus 10 mots par jour. */
 const val MOTS_PAR_JOUR = 10
 
+/** Les signes que l'enfant ne peut pas taper : le clavier n'a que les lettres, l'apostrophe et le tiret. */
+private val PONCTUATION = Regex("[.,;:!?¡¿…\"«»“”()\\[\\]]")
+
+/** Une réponse sans la ponctuation que le clavier n'a pas : « How are you? » devient « How are you ». */
+fun sansPonctuation(texte: String): String = Mots.normaliser(texte.replace(PONCTUATION, " "))
+
+/** Les façons de dire acceptées : « Hi / Hello » en donne deux, sans ponctuation. */
+val MotLangue.variantes: List<String>
+    get() = traduction.split('/').map { sansPonctuation(it) }.filter { it.isNotEmpty() }
+        .ifEmpty { listOf(Mots.normaliser(traduction)) }
+
+/** Ce que l'enfant écrit ou reconstitue avec les lettres : la première façon de dire, sans ponctuation. */
+val MotLangue.aEcrire: String get() = variantes.first()
+
+/**
+ * Juste si la saisie est l'une des façons de dire (« My name is » pour « My name is… », « Hi » ou
+ * « Hello » pour « Hi / Hello »). Les accents comptent, pas les majuscules ni la ponctuation.
+ */
+fun MotLangue.accepte(saisie: String): Boolean {
+    val propre = sansPonctuation(saisie)
+    return variantes.any { Mots.identiques(propre, it) }
+}
+
 /**
  * Les mots d'une semaine, jour par jour (1 = lundi … 7 = dimanche), communs aux trois enfants.
  * [lundi] au format 2026-11-16.

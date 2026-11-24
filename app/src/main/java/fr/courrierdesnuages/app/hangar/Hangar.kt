@@ -57,8 +57,9 @@ val ENGINS: List<Engin> = listOf(
 data class NouvellePiece(val engin: Engin, val piece: String, val numero: Int, val termine: Boolean)
 
 /**
- * Le hangar des engins : chaque médaille d'or en maths (toutes les années) est une pièce, et cinq
- * pièces font un nouvel engin. L'enfant choisit l'engin de son facteur parmi ceux qu'il a construits.
+ * Le hangar des engins : chaque médaille d'or en maths (toutes les années) est une pièce, comme
+ * chaque pièce offerte par le parent, et cinq pièces font un nouvel engin. L'enfant choisit l'engin
+ * de son facteur parmi ceux qu'il a construits.
  */
 object Hangar {
     const val PIECES_PAR_ENGIN = 5
@@ -86,8 +87,11 @@ object Hangar {
     fun enginChoisi(cle: String?, pieces: Long): Engin? = cle?.let { c -> construits(pieces).firstOrNull { it.cle == c } }
 }
 
-/** Les pièces du hangar d'un enfant : ses médailles d'or en maths. */
-val Profil.piecesDuHangar: Long get() = medaillesDe(Matiere.MATHS).or
+/** Les pièces du hangar d'un enfant : ses médailles d'or en maths, et les pièces offertes par le parent. */
+val Profil.piecesDuHangar: Long get() = medaillesDe(Matiere.MATHS).or + piecesOffertes.coerceAtLeast(0)
+
+/** Des pièces offertes par le parent attendent l'enfant sur son accueil. */
+val Profil.pieceOfferteEnAttente: Boolean get() = piecesOffertes > piecesOffertesVues
 
 /** L'engin du facteur de l'enfant, ou null pour son engin de départ (celui de l'avatar). */
 val Profil.enginDuFacteur: Engin? get() = Hangar.enginChoisi(engin, piecesDuHangar)

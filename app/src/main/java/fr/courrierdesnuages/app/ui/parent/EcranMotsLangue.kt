@@ -1,5 +1,9 @@
 package fr.courrierdesnuages.app.ui.parent
 
+import android.content.ActivityNotFoundException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -19,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,9 +32,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import fr.courrierdesnuages.app.data.Jours
@@ -38,6 +47,7 @@ import fr.courrierdesnuages.app.langues.MOTS_PAR_JOUR
 import fr.courrierdesnuages.app.langues.ModeReponse
 import fr.courrierdesnuages.app.langues.MotLangue
 import fr.courrierdesnuages.app.langues.SemaineLangue
+import fr.courrierdesnuages.app.lecture.LecteurDeListe
 import fr.courrierdesnuages.app.ui.AppViewModel
 import fr.courrierdesnuages.app.ui.composants.BarreRetour
 import fr.courrierdesnuages.app.ui.composants.BoutonPrincipal
@@ -46,6 +56,7 @@ import fr.courrierdesnuages.app.ui.composants.Carte
 import fr.courrierdesnuages.app.ui.composants.Pastille
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
 import fr.courrierdesnuages.app.ui.theme.RougeFonce
+import fr.courrierdesnuages.app.ui.theme.Vert
 import java.time.LocalDate
 
 private val NOMS_DES_JOURS = listOf("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche")
@@ -62,12 +73,12 @@ private data class Ligne(val numero: Long, val jour: Int, val francais: String, 
  * trois enfants), et choisit pour chaque mot comment l'enfant répond.
  */
 @Composable
-fun EcranMotsLangue(vm: AppViewModel, langue: Langue) {
+fun EcranMotsLangue(vm: AppViewModel, langue: Langue, lundiInitial: String? = null) {
     val aujourdhui = remember { LocalDate.now() }
     val courante = Semaines.lundi(aujourdhui).toString()
     val suivante = Semaines.lundi(aujourdhui).plusWeeks(1).toString()
-    var lundi by remember { mutableStateOf(courante) }
-    var jour by remember { mutableStateOf(Semaines.numeroDuJour(aujourdhui)) }
+    var lundi by remember { mutableStateOf(if (lundiInitial == suivante) suivante else courante) }
+    var jour by remember { mutableStateOf(if (lundi == suivante) 1 else Semaines.numeroDuJour(aujourdhui)) }
     // Les lignes de chaque semaine affichée, gardées tant que l'écran est ouvert.
     val lignes = remember { mutableStateMapOf<String, List<Ligne>>() }
     val modifiees = remember { mutableStateMapOf<String, Boolean>() }
@@ -95,6 +106,24 @@ fun EcranMotsLangue(vm: AppViewModel, langue: Langue) {
 
     val incompletes = lignes.values.flatten().count { !it.complete && !it.vide }
 
+    // Importer une liste : photo de la feuille, image enregistrée, fichier texte ou texte collé.
+    val contexte = LocalContext.current
+    var photo by rememberSaveable { mutableStateOf<String?>(null) }
+    var probleme by remember { mutableStateOf<String?>(null) }
+    val appareil = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { reussi ->
+        vm.finActiviteExterne()
+        val u = photo
+        if (reussi && u != null) vm.ouvrirImportLangue(langue, lundi, image = u)
+    }
+    val galerie = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        vm.finActiviteExterne()
+        if (uri != null) vm.ouvrirImportLangue(langue, lundi, image = uri.toString())
+    }
+    val fichier = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        vm.finActiviteExterne()
+        if (uri != null) vm.ouvrirImportLangue(langue, lundi, fichierTexte = uri.toString())
+    }
+
     Column(Modifier.fillMaxSize()) {
         BarreRetour("Mots ${langue.deLaLangue}", onRetour = { vm.retour() })
         Column(
@@ -114,12 +143,82 @@ fun EcranMotsLangue(vm: AppViewModel, langue: Langue) {
                     jour = 1
                 })
             }
+            val message = vm.messageMotsLangue
+            if (message != null) {
+                Surface(shape = RoundedCornerShape(18.dp), color = Vert, contentColor = Color.White) {
+                    Text(message, style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth().padding(16.dp))
+                }
+            }
             Text(
                 "Semaine du ${Jours.enClair(lundi)}. De 1 à $MOTS_PAR_JOUR mots par jour, les mêmes pour les trois enfants. " +
                     "Un jour sans séance n'est pas une faute : ses mots attendent la séance suivante.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = EncreDouce,
             )
+            Carte(Modifier.fillMaxWidth()) {
+                Text("Importer une liste", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Photo de la feuille, image enregistrée (comme la liste du samedi), fichier .txt ou texte copié : " +
+                        "l'appli lit les mots et leur traduction, tu vérifies, puis ils se rangent dans la semaine.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = EncreDouce,
+                )
+                Spacer(Modifier.height(10.dp))
+                if (modifiees.isNotEmpty()) {
+                    Text("Enregistre d'abord les mots modifiés, puis importe la liste.", style = MaterialTheme.typography.bodyMedium, color = RougeFonce)
+                } else {
+                    BoutonPrincipal(
+                        texte = "Choisir une image",
+                        onClick = {
+                            probleme = null
+                            vm.debutActiviteExterne()
+                            galerie.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    BoutonSecondaire(
+                        texte = "Photographier la liste",
+                        onClick = {
+                            val u = LecteurDeListe.nouvellePhoto(contexte)
+                            photo = u.toString()
+                            probleme = null
+                            vm.debutActiviteExterne()
+                            try {
+                                appareil.launch(u)
+                            } catch (e: ActivityNotFoundException) {
+                                vm.finActiviteExterne()
+                                probleme = "Aucun appareil photo trouvé sur ce téléphone."
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BoutonSecondaire(
+                            texte = "Fichier .txt",
+                            onClick = {
+                                probleme = null
+                                vm.debutActiviteExterne()
+                                try {
+                                    fichier.launch(arrayOf("text/plain", "text/*"))
+                                } catch (e: ActivityNotFoundException) {
+                                    vm.finActiviteExterne()
+                                    probleme = "Aucune appli pour choisir un fichier sur ce téléphone."
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        BoutonSecondaire(
+                            texte = "Coller un texte",
+                            onClick = { vm.ouvrirImportLangue(langue, lundi, texte = "") },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                val p = probleme
+                if (p != null) Text(p, color = RougeFonce, style = MaterialTheme.typography.bodyMedium)
+            }
             Row(
                 Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),

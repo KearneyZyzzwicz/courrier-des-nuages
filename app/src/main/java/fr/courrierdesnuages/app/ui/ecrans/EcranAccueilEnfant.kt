@@ -40,6 +40,7 @@ import fr.courrierdesnuages.app.france.DEPARTEMENTS
 import fr.courrierdesnuages.app.hangar.ENGINS
 import fr.courrierdesnuages.app.hangar.Hangar
 import fr.courrierdesnuages.app.hangar.enginDuFacteur
+import fr.courrierdesnuages.app.hangar.pieceOfferteEnAttente
 import fr.courrierdesnuages.app.hangar.piecesDuHangar
 import fr.courrierdesnuages.app.italien.Semaines
 import fr.courrierdesnuages.app.langues.Langue
@@ -54,7 +55,6 @@ import fr.courrierdesnuages.app.ui.composants.Carte
 import fr.courrierdesnuages.app.ui.theme.CielBas
 import fr.courrierdesnuages.app.ui.theme.Encre
 import fr.courrierdesnuages.app.ui.theme.EncreDouce
-import fr.courrierdesnuages.app.ui.theme.Jaune
 import fr.courrierdesnuages.app.ui.theme.Rouge
 import fr.courrierdesnuages.app.ui.theme.Vert
 import java.time.LocalDate
@@ -201,6 +201,14 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        if (profil.pieceOfferteEnAttente) {
+            Spacer(Modifier.height(8.dp))
+            BoutonPrincipal(
+                texte = "Une pièce pour ton hangar t'attend !",
+                onClick = { vm.ouvrirPieceOfferte(profil) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Spacer(Modifier.height(8.dp))
         BoutonSecondaire(
             texte = "Mon album de France (${donnees.cartesFrance.size} sur ${DEPARTEMENTS.size})",
@@ -215,7 +223,7 @@ fun EcranAccueilEnfant(vm: AppViewModel, profil: Profil) {
         )
         Spacer(Modifier.height(8.dp))
         BoutonSecondaire(
-            texte = "Mon tour du monde (${donnees.cartesMonde.size} sur ${TOUR_DU_MONDE.size})",
+            texte = "Mon tour du monde anglophone (${donnees.cartesMonde.size} sur ${TOUR_DU_MONDE.size})",
             onClick = { vm.ouvrirAlbumMonde(profil) },
             modifier = Modifier.fillMaxWidth(),
         )

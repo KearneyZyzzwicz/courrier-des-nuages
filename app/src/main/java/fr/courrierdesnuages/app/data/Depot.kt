@@ -92,6 +92,8 @@ class Depot {
                     stats = lireStats(doc.get("annees") as? Map<*, *>, Jours.anneeScolaire()),
                     medailles = lireMedailles(doc.get("annees") as? Map<*, *>),
                     engin = doc.getString("engin"),
+                    piecesOffertes = doc.getLong("piecesOffertes") ?: 0L,
+                    piecesOffertesVues = doc.getLong("piecesOffertesVues") ?: 0L,
                 )
             }
             rappel(liste.sortedWith(compareBy<Profil>({ it.ordre }, { it.prenom })))
@@ -102,6 +104,16 @@ class Depot {
     /** L'engin du hangar choisi pour le facteur ; null pour revenir à l'engin de départ. */
     fun choisirEngin(idProfil: String, cle: String?) {
         profilRef(idProfil).update("engin", cle ?: FieldValue.delete())
+    }
+
+    /** Le parent offre une pièce du hangar (ajout atomique : deux téléphones ne s'écrasent pas). */
+    fun offrirPiece(idProfil: String) {
+        profilRef(idProfil).update("piecesOffertes", FieldValue.increment(1))
+    }
+
+    /** L'enfant a vu les pièces offertes : elles ne l'attendent plus sur son accueil. */
+    fun voirPiecesOffertes(idProfil: String, nombre: Long) {
+        profilRef(idProfil).update("piecesOffertesVues", nombre)
     }
 
     fun enregistrerProfil(id: String, champs: Map<String, Any>) {

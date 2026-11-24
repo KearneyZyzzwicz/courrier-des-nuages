@@ -182,7 +182,7 @@ fun EcranAlbumAtlas(
     onPlacer: (Lieu) -> Unit,
     onRetour: () -> Unit,
     etiquettes: Map<String, String> = emptyMap(),
-    credit: String? = null,
+    sousTitre: String? = null,
 ) {
     val zoom = remember { EtatZoom() }
     val placees = gagnees.filter { it.second.epinglee }.map { it.first }
@@ -197,6 +197,15 @@ fun EcranAlbumAtlas(
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (sousTitre != null) {
+                Text(
+                    sousTitre,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Encre,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             Text(
                 when (gagnees.size) {
                     0 -> texteVide
@@ -275,10 +284,6 @@ fun EcranAlbumAtlas(
                         Text(lieu.nomCourt, style = MaterialTheme.typography.labelMedium, color = Encre, maxLines = 1)
                     }
                 }
-            }
-            if (credit != null) {
-                Spacer(Modifier.height(16.dp))
-                Text(credit, style = MaterialTheme.typography.bodySmall, color = EncreDouce, textAlign = TextAlign.Center)
             }
             Spacer(Modifier.height(24.dp))
         }
