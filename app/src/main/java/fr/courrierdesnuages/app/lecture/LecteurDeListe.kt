@@ -13,6 +13,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import fr.courrierdesnuages.app.data.Mots
 import fr.courrierdesnuages.app.langues.ListeDeMots
 import fr.courrierdesnuages.app.langues.Morceau
+import fr.courrierdesnuages.app.langues.Rangee
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -44,7 +45,7 @@ object LecteurDeListe {
      * Les lignes d'une liste de langue, dans l'ordre de la feuille : les morceaux à la même hauteur
      * sont remis sur la même ligne (deux colonnes séparées par une tabulation).
      */
-    suspend fun lireLignes(contexte: Context, image: Uri): List<String> {
+    suspend fun lireRangees(contexte: Context, image: Uri): List<Rangee> {
         val entree = withContext(Dispatchers.IO) { InputImage.fromFilePath(contexte, image) }
         val lecteur = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         try {

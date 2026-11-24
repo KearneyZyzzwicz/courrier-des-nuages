@@ -11,13 +11,18 @@ data class Morceau(val texte: String, val gauche: Int, val haut: Int, val droite
     val hauteur: Int get() = (bas - haut).coerceAtLeast(1)
 }
 
+/** Une ligne de la feuille, avec sa hauteur sur l'image (ou sa place dans le texte). */
+data class Rangee(val texte: String, val haut: Int, val bas: Int)
+
 /** Les mots répartis sur les jours de la semaine, et ceux qui n'y tiennent pas. */
 data class Repartition(val jours: Map<Int, List<MotLangue>>, val restants: List<MotLangue>)
 
 /**
- * Lecture d'une liste de mots de langue : une ligne par mot, le mot français et sa traduction
+ * Lecture d'une liste de mots de langue. Soit une ligne par mot, le mot français et sa traduction
  * séparés par un tiret, un signe égal, deux-points, une flèche ou deux colonnes
- * (« 1. Hello — Bonjour / Salut », « le chat = il gatto »). L'ordre des deux côtés est deviné.
+ * (« 1. Hello — Bonjour / Salut », « le chat = il gatto ») ; soit le mot sur une ligne et sa
+ * traduction juste en dessous, comme sur l'image d'anglais du samedi (les mots sont alors repérés
+ * aux blancs entre eux). L'ordre des deux côtés est deviné.
  */
 object ListeDeMots {
 
@@ -31,13 +36,28 @@ object ListeDeMots {
      * Remet les morceaux lus dans l'ordre des lignes de la feuille : les morceaux à la même hauteur
      * forment une ligne, de gauche à droite, séparés par une tabulation (deux colonnes).
      */
-    fun rangees(morceaux: List<Morceau>): List<String> {
+    fun rangees(morceaux: List<Morceau>): List<Rangee> {
         val lignes = ArrayList<MutableList<Morceau>>()
-        for (m in morceaux.filter { it.texte.isNotBlank() }.sortedBy { it.haut + it.bas }) {
+        // Un numéro seul (dans une pastille, en marge) ne fait pas partie du mot : il fausserait les lignes.
+        val utiles = morceaux.filter { it.texte.isNotBlank() && !numeroSeul.matches(it.texte) }
+        for (m in utiles.sortedBy { it.haut + it.bas }) {
             val ligne = lignes.lastOrNull()
             if (ligne != null && memeLigne(ligne, m)) ligne += m else lignes += mutableListOf(m)
         }
-        return lignes.map { l -> l.sortedBy { it.gauche }.joinToString(COLONNE) { it.texte.trim() } }
+        return lignes.map { l ->
+            Rangee(l.sortedBy { it.gauche }.joinToString(COLONNE) { it.texte.trim() }, l.minOf { it.haut }, l.maxOf { it.bas })
+        }
+    }
+
+    /** Les lignes d'un texte (.txt ou collé) : une ligne vide écarte deux mots, comme un blanc sur une feuille. */
+    fun rangeesDuTexte(texte: String): List<Rangee> {
+        val sortie = ArrayList<Rangee>()
+        var y = 0
+        for (ligne in texte.lines()) {
+            if (ligne.isNotBlank()) sortie += Rangee(ligne, y, y + 8)
+            y += 10
+        }
+        return sortie
     }
 
     /** Même ligne : les deux se recouvrent sur au moins la moitié de la hauteur du plus petit. */
@@ -49,6 +69,12 @@ object ListeDeMots {
     }
 
     private val numero = Regex("^\\s*\\d{1,2}\\s*[.)°/-]\\s*")
+    private val numeroSeul = Regex("^\\s*\\d{1,2}\\s*[.)]?\\s*$")
+    private val numeroEnColonne = Regex("^\\s*\\d{1,2}\\s*[.)]?\\t+")
+    private val enTetes = setOf(
+        "anglais", "english", "français", "francais", "french", "italien", "italian", "italiano",
+        "traduction", "translation", "mot", "mots", "word", "words",
+    )
     private val puce = Regex("^\\s*[-*•·▪►✓☐→>]+\\s*")
     private val date = Regex("\\b\\d{1,2}/\\d{1,2}(/\\d{2,4})?\\b")
     private val titre = Regex("^(semaine|week|th[eè]me|theme|vocabulaire|vocabulary)\\b", RegexOption.IGNORE_CASE)
@@ -78,7 +104,7 @@ object ListeDeMots {
 
     /** Un côté propre : sans puce ni numéro, sans guillemets ni virgule au bout ; « ... » devient « … ». */
     fun nettoyer(cote: String): String {
-        var t = Mots.normaliser(cote.replace("...", "…").replace('\t', ' '))
+        var t = Mots.normaliser(cote.replace(numeroEnColonne, "").replace("...", "…").replace('\t', ' '))
         t = t.replace(numero, "").replace(puce, "")
         t = t.trim(' ', ',', ';', ':', '.', '"', '«', '»', '“', '”', '*', '_')
         // Un point final ne sert à rien, mais « … », « ? » et « ! » font partie de la phrase.
@@ -91,21 +117,32 @@ object ListeDeMots {
         return t.isEmpty() || titre.containsMatchIn(t) || date.containsMatchIn(t)
     }
 
+    /** Les paires d'une liste de lignes (un texte collé, un fichier .txt). */
+    fun lireLignes(lignes: List<String>, langue: Langue): List<PaireLue> = lire(rangeesDuTexte(lignes.joinToString("\n")), langue)
+
+    /** Les paires d'un texte (un fichier .txt, un texte collé). */
+    fun lireTexte(texte: String, langue: Langue): List<PaireLue> = lire(rangeesDuTexte(texte), langue)
+
     /**
      * Les paires de la liste, dans l'ordre : français d'abord, traduction ensuite (l'ordre de la
-     * feuille est deviné ; le parent peut toujours inverser). Les titres et les dates sont ignorés ;
-     * si plusieurs lignes sont numérotées, seules celles-là comptent.
+     * feuille est deviné ; le parent peut toujours inverser). Les titres, les dates, les numéros seuls
+     * et les en-têtes de colonnes (« Anglais | Français ») sont ignorés ; si plusieurs lignes à
+     * séparateur sont numérotées, seules celles-là comptent.
      */
-    fun lire(lignes: List<String>, langue: Langue): List<PaireLue> {
-        val utiles = lignes.map { it.trim() }.filter { it.isNotEmpty() }
-        val numerotees = utiles.filter { numero.containsMatchIn(it) && separer(it) != null }
-        val candidates = if (numerotees.size >= 2) numerotees else utiles
-        val brutes = candidates.filterNot { ignoree(it) }.mapNotNull { ligne ->
-            val (a, b) = separer(ligne) ?: return@mapNotNull null
-            val pa = nettoyer(a)
-            val pb = nettoyer(b)
-            if (pa.isEmpty() || pb.isEmpty()) null else pa to pb
+    fun lire(rangees: List<Rangee>, langue: Langue): List<PaireLue> {
+        val gardees = rangees
+            .map { it.copy(texte = it.texte.trim()) }
+            .filter { it.texte.isNotEmpty() && !ignoree(it.texte) && !numeroSeul.matches(it.texte) }
+        val avecSeparateur = gardees.filter { separer(it.texte) != null }
+        val decoupees = if (avecSeparateur.isNotEmpty() && avecSeparateur.size * 2 >= gardees.size) {
+            val numerotees = avecSeparateur.filter { numero.containsMatchIn(it.texte) }
+            (if (numerotees.size >= 2) numerotees else avecSeparateur).mapNotNull { separer(it.texte) }
+        } else {
+            empilees(gardees)
         }
+        val brutes = decoupees
+            .map { (a, b) -> nettoyer(a) to nettoyer(b) }
+            .filter { (a, b) -> a.isNotEmpty() && b.isNotEmpty() && !(a.lowercase(Locale.FRENCH) in enTetes && b.lowercase(Locale.FRENCH) in enTetes) }
         // L'ordre de la feuille, deviné sur toute la liste ; une ligne qui dit nettement le contraire garde le sien.
         val ecarts = brutes.map { (a, b) -> scoreFrancais(b, langue) - scoreFrancais(a, langue) }
         val inverserTout = ecarts.sum() > 0
@@ -121,6 +158,54 @@ object ListeDeMots {
                 if (inverser) PaireLue(b, a) else PaireLue(a, b)
             }
             .filter { vus.add(MotLangue(it.francais, it.traduction).code.lowercase(Locale.FRENCH)) }
+    }
+
+    /**
+     * Sans séparateur : le mot sur une ligne, sa traduction en dessous. Les mots sont repérés aux
+     * blancs : un écart nettement plus grand que les autres sépare deux mots. Sans blancs nets, les
+     * lignes vont deux par deux.
+     */
+    private fun empilees(lignes: List<Rangee>): List<Pair<String, String>> {
+        if (lignes.size < 2) return emptyList()
+        val ecarts = lignes.zipWithNext { a, b -> b.haut - a.bas }
+        val limite = seuilDesBlancs(ecarts)
+        val groupes = ArrayList<MutableList<Rangee>>()
+        if (limite != null) {
+            groupes += mutableListOf(lignes.first())
+            for (i in 1 until lignes.size) {
+                if (ecarts[i - 1] > limite) groupes += mutableListOf(lignes[i]) else groupes.last() += lignes[i]
+            }
+        } else {
+            for (deux in lignes.chunked(2)) groupes += deux.toMutableList()
+        }
+        return groupes.filter { it.size >= 2 }.map { g -> g.first().texte to g.drop(1).joinToString(" ") { it.texte } }
+    }
+
+    /**
+     * Partage les écarts entre les lignes en deux groupes, les petits et les grands, le plus nettement
+     * possible (le moins de dispersion dans chaque groupe). Renvoie la limite si les grands écarts
+     * sont au moins 1,8 fois plus grands que les petits, sinon null (pas de blancs nets).
+     */
+    fun seuilDesBlancs(ecarts: List<Int>): Int? {
+        if (ecarts.size < 2) return null
+        val tries = ecarts.map { it.toDouble() }.sorted()
+        fun dispersion(l: List<Double>): Double {
+            val m = l.average()
+            return l.sumOf { (it - m) * (it - m) }
+        }
+        var meilleure: Int? = null
+        var plusPetite = Double.MAX_VALUE
+        for (k in 1 until tries.size) {
+            val d = dispersion(tries.subList(0, k)) + dispersion(tries.subList(k, tries.size))
+            if (d < plusPetite) {
+                plusPetite = d
+                meilleure = k
+            }
+        }
+        val k = meilleure ?: return null
+        val petits = tries.subList(0, k).average()
+        val grands = tries.subList(k, tries.size).average()
+        return if (grands >= 1.8 * maxOf(petits, 1.0)) ((tries[k - 1] + tries[k]) / 2).toInt() else null
     }
 
     private val motsFrancais = listOf(

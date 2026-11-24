@@ -106,7 +106,7 @@ fun EcranImportLangue(vm: AppViewModel, e: Ecran.ImportLangue) {
         for (p in paires) lignes += LigneLue(compteur++, p.francais, p.traduction)
         probleme = if (paires.isEmpty()) {
             "Aucun mot trouvé. Il faut une ligne par mot, avec le mot et sa traduction séparés par un tiret, " +
-                "un signe = ou deux-points (« Hello — Bonjour »). Tu peux aussi les ajouter à la main."
+                "un signe = ou deux-points (« Hello — Bonjour »), ou la traduction juste sous le mot. Tu peux aussi les ajouter à la main."
         } else {
             null
         }
@@ -119,11 +119,11 @@ fun EcranImportLangue(vm: AppViewModel, e: Ecran.ImportLangue) {
                 e.image != null -> {
                     val uri = Uri.parse(e.image)
                     apercu = LecteurDeListe.apercu(contexte, uri)?.asImageBitmap()
-                    remplir(ListeDeMots.lire(LecteurDeListe.lireLignes(contexte, uri), langue))
+                    remplir(ListeDeMots.lire(LecteurDeListe.lireRangees(contexte, uri), langue))
                 }
                 e.fichierTexte != null -> {
                     val contenu = LecteurDeListe.lireTexte(contexte, Uri.parse(e.fichierTexte))
-                    remplir(ListeDeMots.lire(contenu.lines(), langue))
+                    remplir(ListeDeMots.lireTexte(contenu, langue))
                 }
             }
         } catch (ex: Exception) {
@@ -163,7 +163,7 @@ fun EcranImportLangue(vm: AppViewModel, e: Ecran.ImportLangue) {
                 Carte(Modifier.fillMaxWidth()) {
                     Text("Le texte de la liste", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        "Appuie longuement dans la case, puis sur « Coller ». Une ligne par mot : « Hello — Bonjour », « le chat = il gatto ».",
+                        "Appuie longuement dans la case, puis sur « Coller ». Une ligne par mot (« Hello — Bonjour », « le chat = il gatto »), ou le mot sur une ligne et sa traduction en dessous.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = EncreDouce,
                     )
@@ -177,7 +177,7 @@ fun EcranImportLangue(vm: AppViewModel, e: Ecran.ImportLangue) {
                     Spacer(Modifier.height(8.dp))
                     BoutonPrincipal(
                         texte = if (lue) "Relire le texte" else "Lire le texte",
-                        onClick = { remplir(ListeDeMots.lire(texte.lines(), langue)) },
+                        onClick = { remplir(ListeDeMots.lireTexte(texte, langue)) },
                         actif = texte.isNotBlank(),
                         modifier = Modifier.fillMaxWidth(),
                     )
